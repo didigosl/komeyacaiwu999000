@@ -1,0 +1,1748 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>资金管理系统 · 收支记账</title>
+    <style>
+      :root { --bg:#0b1220; --panel:#111827; --muted:#94a3b8; --text:#e5e7eb; --blue:#1a73e8; --line:#1f2937; --green:#16a34a; --red:#ef4444; --orange:#f59e0b; }
+      * { box-sizing: border-box; }
+      html, body { height: 100%; }
+      body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "PingFang SC", "Noto Sans SC", "Microsoft Yahei", sans-serif; background:var(--bg); color:var(--text); }
+      .layout { display:flex; height:100vh; }
+      .sidebar { width:240px; background:#0a0f1a; border-right:1px solid var(--line); display:flex; flex-direction:column; }
+      .brand { display:flex; align-items:center; gap:10px; padding:16px; font-weight:600; }
+      .brand .logo { width:24px; height:24px; border-radius:6px; background:var(--blue); display:inline-block; }
+      .nav { display:flex; flex-direction:column; padding:8px; gap:6px; }
+      .nav a { display:flex; align-items:center; gap:8px; padding:10px 12px; border-radius:8px; color:#cbd5e1; text-decoration:none; }
+      .nav a:hover { background:#0f172a; color:#fff; }
+      .nav a.active { background:var(--blue); color:#fff; }
+      .nav .section { margin-top:8px; color:var(--muted); padding:0 12px; font-size:12px; }
+      .content { flex:1; padding:24px; overflow:auto; }
+      .row { display:grid; grid-template-columns:1fr 420px; gap:24px; }
+      .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; }
+      .search { display:flex; gap:8px; padding:16px; align-items:center; margin-bottom:12px; }
+      .field { display:flex; align-items:center; gap:8px; }
+      .label { font-size:13px; color:var(--muted); }
+      select, input[type="text"], input[type="number"], input[type="date"], textarea, input[type="file"] { background:#0b1524; border:1px solid #233048; color:#fff; border-radius:8px; padding:10px 12px; outline:none; }
+      input[type="date"] { padding:8px 10px; }
+      textarea { min-height:120px; resize:vertical; }
+      .btn { background:var(--blue); color:#fff; border:none; border-radius:8px; padding:10px 16px; cursor:pointer; }
+      .btn:disabled { opacity:0.6; cursor:not-allowed; }
+      .table-wrap { padding:16px; }
+      table { width:100%; border-collapse:collapse; font-size:14px; }
+      thead th { text-align:left; color:#cbd5e1; padding:12px; border-bottom:1px solid var(--line); }
+      tbody td { padding:12px; border-top:1px solid var(--line); color:#e2e8f0; }
+      tbody tr:hover { background:#0f172a; }
+      .row-income td { color: var(--green); }
+      .row-expense td { color: var(--orange); }
+      .empty { text-align:center; color:var(--muted); padding:32px 0; }
+      .form { padding:16px; display:flex; flex-direction:column; gap:12px; }
+      .form h3 { margin:4px 0 8px; font-size:16px; }
+      .group { display:flex; flex-direction:column; gap:6px; }
+      .submit { display:flex; justify-content:flex-end; padding-top:8px; }
+      .tag { display:inline-block; padding:4px 8px; border-radius:999px; font-size:12px; background:#0f172a; border:1px solid var(--line); color:#cbd5e1; }
+      .inline { display:flex; align-items:center; gap:8px; width:100%; }
+      .add { padding:10px 16px; display:flex; align-items:center; justify-content:center; background:var(--blue); color:#fff; border-radius:8px; border:none; cursor:pointer; font-size:16px; }
+      .tabs { display:flex; gap:8px; }
+      .tab { padding:8px 12px; border-radius:8px; background:#0f172a; color:#cbd5e1; border:1px solid var(--line); cursor:pointer; }
+      .tab.active { background:var(--blue); color:#fff; }
+      .bar { display:flex; justify-content:space-between; align-items:center; padding:16px; border-bottom:1px solid var(--line); }
+      .grid6 { display:grid; grid-template-columns:repeat(6,1fr); gap:12px; }
+      .span2 { grid-column:span 2; }
+      .actions a { margin-right:10px; text-decoration:none; }
+      .link-blue { color:#60a5fa; }
+      .link-red { color:#f87171; }
+      .link-green { color:#34d399; }
+      .link-orange { color:#f59e0b; }
+      .panel-light { background:#f8fafc; color:#0f172a; border:1px solid #e5e7eb; border-radius:12px; padding:16px; }
+      .light-top { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
+      .light-btn { background:#1a73e8; color:#fff; border:none; border-radius:6px; padding:8px 12px; cursor:pointer; }
+      .light-input { background:#fff; border:1px solid #cbd5e1; color:#0f172a; border-radius:6px; padding:8px 10px; }
+      .light-select { background:#fff; border:1px solid #cbd5e1; color:#0f172a; border-radius:6px; padding:6px 8px; }
+      .switch { display:inline-flex; align-items:center; gap:6px; }
+      .switch button { background:#1a73e8; color:#fff; border:none; border-radius:999px; padding:4px 10px; cursor:pointer; font-size:12px; }
+      .switch.off button { background:#64748b; }
+      .cat-bar { display:flex; justify-content:space-between; align-items:center; padding:16px; }
+      .cat-btn { background:var(--blue); color:#fff; border:none; border-radius:8px; padding:8px 12px; cursor:pointer; }
+      .cat-list { display:flex; flex-direction:column; gap:16px; padding:16px; }
+      .cat-panel { background:#0f172a; border:1px solid var(--line); border-radius:12px; }
+      .cat-header { display:flex; justify-content:space-between; align-items:center; padding:12px 16px; color:#cbd5e1; border-bottom:1px solid var(--line); }
+      .cat-title { font-weight:600; }
+      .cat-actions { display:flex; gap:8px; }
+      .btn-icon { width:28px; height:28px; border:none; border-radius:8px; color:#fff; cursor:pointer; }
+      .btn-green { background:#22c55e; }
+      .btn-blue { background:#3b82f6; }
+      .btn-red { background:#ef4444; }
+      .cat-items { display:flex; flex-direction:column; }
+      .cat-item { display:flex; justify-content:space-between; align-items:center; padding:10px 16px; border-top:1px solid var(--line); }
+      .cat-name { color:#e5e7eb; }
+      .select { position:relative; flex:1; min-width:0; }
+      .select input { width:100%; }
+      .dropdown { position:absolute; left:0; right:0; top:calc(100% + 6px); background:#0f172a; border:1px solid var(--line); border-radius:10px; box-shadow:0 8px 24px rgba(0,0,0,0.25); z-index:50; }
+      .dd-head { padding:12px; border-bottom:1px solid var(--line); }
+      .dd-list { max-height:280px; overflow:auto; }
+      .dd-item { padding:10px 12px; border-top:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; color:#e2e8f0; cursor:pointer; }
+      .dd-item:hover { background:#132033; }
+      .modal-overlay { position:fixed; inset:0; background:rgba(2,6,23,0.7); display:flex; align-items:center; justify-content:center; z-index:100; }
+      .modal { width:860px; background:var(--panel); border:1px solid var(--line); border-radius:12px; box-shadow:0 16px 40px rgba(0,0,0,0.35); }
+      .modal-header { display:flex; justify-content:space-between; align-items:center; padding:16px; border-bottom:1px solid var(--line); }
+      .modal-title { font-weight:600; }
+      .pill-tabs { display:flex; gap:8px; }
+      .pill { padding:8px 12px; border-radius:999px; border:1px solid var(--line); background:#0f172a; color:#cbd5e1; cursor:pointer; }
+      .pill.active { background:var(--blue); color:#fff; }
+      .modal-body { padding:16px; }
+      .modal-actions { display:flex; justify-content:flex-end; gap:10px; padding:16px; border-top:1px solid var(--line); }
+      .btn-secondary { background:#0f172a; color:#cbd5e1; border:1px solid var(--line); border-radius:8px; padding:10px 16px; cursor:pointer; }
+      .grid6 > input { width:100%; }
+      .thumb-img { width:36px; height:36px; object-fit:cover; border-radius:6px; border:1px solid var(--line); cursor:pointer; }
+      .thumb-pdf { display:inline-block; padding:6px 10px; border-radius:6px; border:1px solid var(--line); background:#0f172a; color:#cbd5e1; font-size:12px; cursor:pointer; }
+      .viewer-box { max-width:90vw; max-height:90vh; background:#0f172a; border:1px solid var(--line); border-radius:12px; padding:16px; }
+      .viewer-box img { max-width:85vw; max-height:80vh; display:block; }
+      .viewer-box embed, .viewer-box iframe { width:85vw; height:80vh; border:none; }
+      .pay-row-recv td { color: var(--green); }
+      .pay-row-pay td { color: var(--orange); }
+      .pay-row-settled td { color: #fff; }
+      .summary { display:flex; gap:12px; padding:12px 16px; border-bottom:1px solid var(--line); }
+      .summary-item { background:#0f172a; border:1px solid var(--line); border-radius:8px; padding:8px 12px; color:#e5e7eb; font-weight:600; }
+      .type-switch { display:flex; gap:12px; }
+      .type-item { flex:1; background:#0f172a; border:1px solid var(--line); border-radius:10px; padding:14px 16px; color:#cbd5e1; font-weight:600; cursor:pointer; }
+      .type-item.active.recv { color:#22c55e; border-color:#14532d; box-shadow:0 0 0 1px #14532d inset; }
+      .type-item.active.pay { color:#f97316; border-color:#7c2d12; box-shadow:0 0 0 1px #7c2d12 inset; }
+      .overdue { color: var(--red) !important; font-weight:700; }
+    </style>
+  </head>
+  <body>
+    <div class="layout">
+      <aside class="sidebar">
+        <div class="brand"><span class="logo"></span><span>资金管理系统</span></div>
+        <nav class="nav">
+          <a href="#home">首页</a>
+          <a href="#ledger" class="active">收支记账</a>
+          <a href="#payables">应收/应付账款</a>
+          <a href="#contacts">往来单位</a>
+          <a href="#analytics">统计分析</a>
+          <div class="section">系统设置</div>
+          <a href="#categories">分类管理</a>
+          <a href="#accounts">账户管理</a>
+          <a href="#user-accounts">帐号管理</a>
+          <a href="#role-accounts">角色管理</a>
+        </nav>
+        <div id="auth-area" style="padding:12px; border-top:1px solid var(--line); margin-top:auto">
+          <div id="auth-user-tag" class="tag" style="display:none; margin-bottom:8px"></div>
+          <button id="logout-btn" class="btn-secondary" style="display:none; width:100%">退出登录</button>
+        </div>
+      </aside>
+      <main class="content">
+        <div id="page-login" style="display:none">
+          <div class="card" style="max-width:560px; margin:40px auto">
+            <div class="bar">
+              <h3 style="margin:0">登录</h3>
+            </div>
+            <form class="form" id="login-form">
+              <div class="group">
+                <span class="label">账号</span>
+                <input id="login-user" type="text" placeholder="请输入账号">
+              </div>
+              <div class="group">
+                <span class="label">密码</span>
+                <input id="login-pass" type="password" placeholder="请输入密码">
+              </div>
+              <div class="submit">
+                <button id="login-submit" class="btn" type="submit">登录</button>
+              </div>
+              <div id="login-msg" class="tag" style="display:none; margin-top:4px; background:#0f172a; color:#fca5a5; border-color:#7f1d1d">账号或密码错误</div>
+            </form>
+            <div style="padding:0 16px 16px; color:#94a3b8">提示：超级管理员 aaaaaa 的默认密码为 999000</div>
+          </div>
+        </div>
+        <div id="page-ledger">
+          <div class="card search">
+            <div class="field">
+              <span class="label">类型</span>
+              <select id="filter-type">
+                <option value="all">全部类型</option>
+                <option value="收入">收入</option>
+                <option value="支出">支出</option>
+              </select>
+            </div>
+            <div class="field">
+              <span class="label">开始</span>
+              <input id="filter-start" type="date">
+            </div>
+            <div class="field">
+              <span class="label">结束</span>
+              <input id="filter-end" type="date">
+            </div>
+            <div class="field" style="flex:1">
+              <span class="label">关键词</span>
+              <input id="filter-key" type="text" placeholder="搜索关键词">
+            </div>
+          </div>
+          <div class="row">
+            <div class="card">
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>类型</th>
+                      <th>子类目</th>
+                      <th>往来单位</th>
+                      <th>金额</th>
+                      <th>支付方式</th>
+                      <th>文件</th>
+                      <th>录入方式</th>
+                      <th>备注</th>
+                      <th>日期</th>
+                    </tr>
+                  </thead>
+                  <tbody id="rows">
+                    <tr class="empty"><td colspan="9">暂无流水记录</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div class="card">
+              <form class="form" id="entry-form">
+                <h3>录入流水</h3>
+                <div class="group">
+                  <span class="label">类型</span>
+                  <select id="entry-type">
+                    <option value="">请选择类型</option>
+                    <option value="收入">收入</option>
+                    <option value="支出">支出</option>
+                  </select>
+                </div>
+                <div class="group">
+                  <span class="label">子类目</span>
+                  <select id="entry-category">
+                    <option value="">请选择子类目</option>
+                  </select>
+                </div>
+                <div class="group">
+                  <span class="label">往来单位</span>
+                  <div class="inline" id="client-wrap">
+                    <div class="select">
+                      <input id="entry-client" type="text" placeholder="请选择往来单位">
+                      <div id="client-dd" class="dropdown" style="display:none">
+                        <div class="dd-head">
+                          <input id="client-search" type="text" placeholder="这里搜索" style="width:100%">
+                        </div>
+                        <div id="client-list" class="dd-list"></div>
+                      </div>
+                    </div>
+                    <button id="client-plus" type="button" class="add">+</button>
+                  </div>
+                </div>
+                <div class="group">
+                  <span class="label">金额</span>
+                  <input id="entry-amount" type="number" step="0.01" placeholder="0.00">
+                </div>
+                <div class="group">
+                  <span class="label">支付方式</span>
+                  <select id="entry-method">
+                    <option value="">请选择</option>
+                    <option>现金</option>
+                    <option>银行卡</option>
+                    <option>微信</option>
+                    <option>支付宝</option>
+                  </select>
+                </div>
+                <div class="group">
+                  <span class="label">附件</span>
+                  <input id="entry-file" type="file" accept=".jpg,.jpeg,.pdf">
+                  <div class="label">文件只支持格式 jpg、pdf</div>
+                </div>
+                <div class="group">
+                  <span class="label">备注</span>
+                  <textarea id="entry-notes" placeholder="可选"></textarea>
+                </div>
+                <div class="submit">
+                  <button class="btn" type="submit">提交</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+        <div id="client-modal" class="modal-overlay" style="display:none">
+          <div class="modal">
+            <div class="modal-header">
+              <div class="modal-title">新增客户 / 对象</div>
+              <div class="pill-tabs">
+                <button class="pill active" data-target="customers">客户列表</button>
+                <button class="pill" data-target="merchants">商家列表</button>
+                <button class="pill" data-target="others">其它往来单位</button>
+              </div>
+            </div>
+            <form id="client-modal-form">
+              <div class="modal-body">
+                <div class="grid6">
+                  <input id="m-name" type="text" placeholder="名称">
+                  <input id="m-company" type="text" placeholder="公司名称">
+                  <input id="m-code" type="text" placeholder="编号">
+                  <input id="m-contact" type="text" placeholder="联系人">
+                  <input id="m-phone" type="text" placeholder="电话">
+                  <input id="m-country" type="text" placeholder="国家">
+                  <input id="m-address" class="span2" type="text" placeholder="地址">
+                  <input id="m-zip" type="text" placeholder="邮编">
+                  <input id="m-city" type="text" placeholder="城市">
+                  <input id="m-remark" class="span2" type="text" placeholder="备注">
+                </div>
+              </div>
+              <div class="modal-actions">
+                <button type="button" id="client-cancel" class="btn-secondary">取消</button>
+                <button type="submit" class="btn">确认保存</button>
+              </div>
+            </form>
+          </div>
+        </div>
+        <div id="file-viewer" class="modal-overlay" style="display:none">
+          <div class="viewer-box" id="file-viewer-box"></div>
+        </div>
+        <div id="confirm-modal" class="modal-overlay" style="display:none">
+          <div class="modal">
+            <div class="modal-header">
+              <div class="modal-title">确认删除</div>
+            </div>
+            <div class="modal-body">
+              <div>确定删除该往来单位信息？此操作不可撤销</div>
+            </div>
+            <div class="modal-actions">
+              <button type="button" id="confirm-cancel" class="btn-secondary">取消</button>
+              <button type="button" id="confirm-ok" class="btn">确认删除</button>
+            </div>
+          </div>
+        </div>
+        <div id="acc-init-modal" class="modal-overlay" style="display:none">
+          <div class="modal">
+            <div class="modal-header">
+              <div class="modal-title">账户初始金额设置</div>
+            </div>
+            <div class="modal-body">
+              <div class="group">
+                <span class="label">初始金额</span>
+                <input id="acc-init-amount" type="number" step="0.01" placeholder="0.00">
+              </div>
+            </div>
+            <div class="modal-actions">
+              <button type="button" id="acc-init-cancel" class="btn-secondary">取消</button>
+              <button type="button" id="acc-init-ok" class="btn">保存</button>
+            </div>
+          </div>
+        </div>
+        <div id="page-payables" style="display:none">
+          <div class="row">
+            <div class="card">
+              <div class="summary">
+                <div class="summary-item">应收总额 <span id="sum-recv">0.00</span></div>
+                <div class="summary-item">应付总额 <span id="sum-pay">0.00</span></div>
+                <div class="field" style="margin-left:auto; min-width:320px; display:flex; align-items:center; gap:8px;">
+                  <span class="label">关键词</span>
+                  <input id="pay-filter-key" type="text" placeholder="搜索关键词">
+                </div>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>款项类型</th>
+                      <th>往来单位</th>
+                      <th>单据/凭证号</th>
+                      <th>金额</th>
+                      <th>信任天数</th>
+                      <th>备注</th>
+                      <th>日期</th>
+                    </tr>
+                  </thead>
+                  <tbody id="pay-rows">
+                    <tr class="empty"><td colspan="7">暂无记录</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div class="card">
+              <form class="form" id="pay-form">
+                <h3>应收 / 应付录入</h3>
+                <div class="group">
+                  <span class="label">应收应付</span>
+                  <div class="type-switch" id="type-switch">
+                    <button type="button" class="type-item" data-type="应收账款">应收账款</button>
+                    <button type="button" class="type-item" data-type="应付账款">应付账款</button>
+                  </div>
+                  <input id="pay-type" type="hidden" value="应收账款">
+                </div>
+                <div class="group">
+                  <span class="label">往来单位</span>
+                  <div class="inline" id="pay-wrap">
+                    <div class="select">
+                      <input id="pay-partner" type="text" placeholder="请选择往来单位">
+                      <div id="pay-dd" class="dropdown" style="display:none">
+                        <div class="dd-head">
+                          <input id="pay-search" type="text" placeholder="这里搜索" style="width:100%">
+                        </div>
+                        <div id="pay-list" class="dd-list"></div>
+                      </div>
+                    </div>
+                    <button type="button" id="partner-add" class="add">+</button>
+                  </div>
+                </div>
+                <div class="group">
+                  <span class="label">单据 / 凭证号</span>
+                  <input id="pay-doc" type="text" placeholder="单据 / 凭证号">
+                </div>
+                <div class="group">
+                  <span class="label">金额</span>
+                  <input id="pay-amount" type="number" step="0.01" placeholder="金额">
+                </div>
+                <div class="group">
+                  <span class="label">信任天数</span>
+                  <select id="pay-trust">
+                    <option value="0">立即付款</option>
+                    <option value="30" selected>30天</option>
+                    <option value="60">60天</option>
+                    <option value="90">90天</option>
+                    <option value="180">半年</option>
+                    <option value="365">一年</option>
+                  </select>
+                </div>
+                <div class="group">
+                  <span class="label">备注</span>
+                  <textarea id="pay-notes" placeholder="备注"></textarea>
+                </div>
+                <div class="submit">
+                  <button class="btn" type="submit">提交</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+        <div id="page-contacts" style="display:none">
+          <div class="card">
+            <div class="bar">
+              <div class="tabs">
+                <button class="tab active" data-tab="customers">客户列表</button>
+                <button class="tab" data-tab="merchants">商家列表</button>
+                <button class="tab" data-tab="others">其它往来单位</button>
+              </div>
+              <input id="contacts-search" type="text" placeholder="搜索..." style="width:280px">
+            </div>
+            <div style="padding:16px">
+              <h3 style="margin:0 0 12px">新增</h3>
+              <form id="contacts-form">
+                <div class="grid6">
+                  <input id="ct-name" type="text" placeholder="店名">
+                  <input id="ct-company" type="text" placeholder="公司名称">
+                  <input id="ct-code" type="text" placeholder="税号">
+                  <input id="ct-contact" type="text" placeholder="联系人">
+                  <input id="ct-phone" type="text" placeholder="电话">
+                  <input id="ct-country" type="text" placeholder="国家">
+                  <input id="ct-address" class="span2" type="text" placeholder="地址">
+                  <input id="ct-zip" type="text" placeholder="邮编">
+                  <input id="ct-city" type="text" placeholder="城市">
+                  <input id="ct-remark" class="span2" type="text" placeholder="备注">
+                </div>
+                <div class="submit" style="margin-top:12px">
+                  <button class="btn" id="contacts-submit" type="submit">新增</button>
+                </div>
+              </form>
+              <div class="table-wrap" style="margin-top:12px">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>店名</th>
+                      <th>公司名称</th>
+                      <th>税号</th>
+                      <th>联系人</th>
+                      <th>电话</th>
+                      <th>城市</th>
+                      <th>备注</th>
+                      <th>交易金额</th>
+                      <th>创建时间</th>
+                      <th>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody id="contacts-rows">
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="page-categories" style="display:none">
+          <div class="card">
+            <div class="cat-bar">
+              <h3 style="margin:0">类目列表</h3>
+              <button id="add-cat" class="cat-btn">添加一级类目</button>
+            </div>
+            <div id="cat-list" class="cat-list"></div>
+          </div>
+        </div>
+        <div id="page-accounts" style="display:none">
+          <div class="card">
+            <div class="bar">
+              <h3 style="margin:0">账户管理</h3>
+              <button id="acc-add" class="btn">添加账户</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>账户名称</th>
+                    <th>账户余额</th>
+                    <th>账户说明</th>
+                    <th>创建时间</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody id="acc-rows"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div id="page-user-accounts" style="display:none">
+          <div class="card">
+            <div class="bar">
+              <h3 style="margin:0">帐号管理</h3>
+              <div style="display:flex; align-items:center; gap:12px">
+                <button id="user-create" class="btn">创建账号</button>
+                <div class="field">
+                  <span class="label">每页</span>
+                  <select id="user-page-size">
+                    <option>10</option>
+                    <option>20</option>
+                    <option>50</option>
+                  </select>
+                  <span class="label">条记录</span>
+                </div>
+                <div class="field" style="min-width:260px">
+                  <span class="label">检索</span>
+                  <input id="user-search" type="text" placeholder="搜索账号/角色/编号">
+                </div>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>编号</th>
+                    <th>账号</th>
+                    <th>角色</th>
+                    <th>创建时间</th>
+                    <th>状态</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody id="user-rows"></tbody>
+              </table>
+            </div>
+            <div class="bar" style="justify-content:space-between">
+              <div id="user-summary">显示 0 到 0 项，共 0 项</div>
+              <div style="display:flex; align-items:center; gap:8px">
+                <button id="user-prev" class="btn-secondary">上一页</button>
+                <span id="user-page">1</span>
+                <button id="user-next" class="btn-secondary">下一页</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="page-role-accounts" style="display:none">
+          <div class="card">
+            <div class="bar">
+              <h3 style="margin:0">角色管理</h3>
+              <div style="display:flex; align-items:center; gap:12px">
+                <button id="role-create" class="btn">创建角色</button>
+                <div class="field">
+                  <span class="label">每页</span>
+                  <select id="role-page-size">
+                    <option>10</option>
+                    <option>20</option>
+                    <option>50</option>
+                  </select>
+                  <span class="label">条记录</span>
+                </div>
+                <div class="field" style="min-width:260px">
+                  <span class="label">检索</span>
+                  <input id="role-search" type="text" placeholder="搜索角色/描述/编号">
+                </div>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>编号</th>
+                    <th>角色名称</th>
+                    <th>角色描述</th>
+                    <th>创建时间</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody id="role-rows"></tbody>
+              </table>
+            </div>
+            <div class="bar" style="justify-content:space-between">
+              <div id="role-summary">显示 0 到 0 项，共 0 项</div>
+              <div style="display:flex; align-items:center; gap:8px">
+                <button id="role-prev" class="btn-secondary">上一页</button>
+                <span id="role-page">1</span>
+                <button id="role-next" class="btn-secondary">下一页</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="user-modal" class="modal-overlay" style="display:none">
+          <div class="modal">
+            <div class="modal-header">
+              <div class="modal-title">创建账号</div>
+            </div>
+            <form id="user-form">
+              <div class="modal-body">
+                <div class="grid6">
+                  <input id="u-name" type="text" placeholder="账号">
+                  <input id="u-role" type="text" placeholder="角色">
+                </div>
+              </div>
+              <div class="modal-actions">
+                <button type="button" id="user-cancel" class="btn-secondary">取消</button>
+                <button type="submit" class="btn">保存</button>
+              </div>
+            </form>
+          </div>
+        </div>
+        <div id="logout-modal" class="modal-overlay" style="display:none">
+          <div class="modal" style="max-width:420px">
+            <div class="modal-header">
+              <div class="modal-title">确认退出登录</div>
+            </div>
+            <div class="modal-body">
+              <div>确定要退出当前账号吗？</div>
+            </div>
+            <div class="modal-actions">
+              <button type="button" id="logout-cancel" class="btn-secondary">取消</button>
+              <button type="button" id="logout-ok" class="btn">退出登录</button>
+            </div>
+          </div>
+        </div>
+        <div id="reset-modal" class="modal-overlay" style="display:none">
+          <div class="modal" style="max-width:520px">
+            <div class="modal-header">
+              <div class="modal-title">重置密码</div>
+            </div>
+            <div class="modal-body">
+              <div id="reset-msg">已经将帐号密码重置，重置后密码为“111111”</div>
+            </div>
+            <div class="modal-actions">
+              <button type="button" id="reset-cancel" class="btn-secondary">取消</button>
+              <button type="button" id="reset-ok" class="btn">确认重置</button>
+            </div>
+          </div>
+        </div>
+        <div id="role-modal" class="modal-overlay" style="display:none">
+          <div class="modal">
+            <div class="modal-header">
+              <div class="modal-title">创建角色</div>
+            </div>
+            <form id="role-form">
+              <div class="modal-body">
+                <div class="grid6">
+                  <input id="r-name" type="text" placeholder="角色名称">
+                  <input id="r-desc" type="text" placeholder="角色描述">
+                </div>
+              </div>
+              <div class="modal-actions">
+                <button type="button" id="role-cancel" class="btn-secondary">取消</button>
+                <button type="submit" class="btn">保存</button>
+              </div>
+            </form>
+          </div>
+        </div>
+        <div id="page-empty" style="display:none">
+          <div class="card" style="padding:24px">
+            <div class="tag">页面建设中</div>
+          </div>
+        </div>
+      </main>
+    </div>
+    <script>
+      const records = [];
+      const payRecords = [];
+      const partners = [];
+      const contactsData = {
+        customers: [
+          { name:'客户A', contact:'张三', phone:'13800000001', city:'上海', remark:'重要客户', owner:'客户', created:'2026/01/01 10:00:00' },
+          { name:'客户B', contact:'李四', phone:'13800000002', city:'杭州', remark:'', owner:'客户', created:'2026/01/02 11:20:00' },
+          { name:'客户C', contact:'王五', phone:'13800000003', city:'苏州', remark:'', owner:'客户', created:'2026/01/03 09:10:00' }
+        ],
+        merchants: [
+          { name:'商家A', contact:'刘一', phone:'13900000001', city:'上海', remark:'', owner:'商家', created:'2026/01/01 10:00:00' },
+          { name:'商家B', contact:'陈二', phone:'13900000002', city:'杭州', remark:'', owner:'商家', created:'2026/01/02 11:20:00' },
+          { name:'商家C', contact:'周三', phone:'13900000003', city:'苏州', remark:'', owner:'商家', created:'2026/01/03 09:10:00' }
+        ],
+        others: [
+          { name:'单位A', contact:'赵一', phone:'13700000001', city:'上海', remark:'', owner:'其它', created:'2026/01/01 10:00:00' },
+          { name:'单位B', contact:'钱二', phone:'13700000002', city:'杭州', remark:'', owner:'其它', created:'2026/01/02 11:20:00' },
+          { name:'单位C', contact:'孙三', phone:'13700000003', city:'苏州', remark:'', owner:'其它', created:'2026/01/03 09:10:00' }
+        ]
+      };
+      const entryType = document.getElementById('entry-type');
+      const entryCategory = document.getElementById('entry-category');
+      const entryClient = document.getElementById('entry-client');
+      const entryAmount = document.getElementById('entry-amount');
+      const entryMethod = document.getElementById('entry-method');
+      const entryFile = document.getElementById('entry-file');
+      const entryNotes = document.getElementById('entry-notes');
+      const rows = document.getElementById('rows');
+      const filterType = document.getElementById('filter-type');
+      const filterKey = document.getElementById('filter-key');
+      const filterStart = document.getElementById('filter-start');
+      const filterEnd = document.getElementById('filter-end');
+      const accRows = document.getElementById('acc-rows');
+      const accAdd = document.getElementById('acc-add');
+      const accountsData = [
+        { name:'现金账户', balance:0, desc:'系统预置账户', created:'2026/02/08 00:00:00', initialSet:false },
+        { name:'银行账户 BBVA', balance:0, desc:'系统预置账户', created:'2026/02/08 00:00:00', initialSet:false },
+        { name:'银行账户 Santander', balance:0, desc:'系统预置账户', created:'2026/02/08 00:00:00', initialSet:false },
+        { name:'人民币账号1', balance:0, desc:'系统预置账户', created:'2026/02/08 00:00:00', initialSet:false },
+        { name:'人民币账户 中智', balance:0, desc:'系统预置账户', created:'2026/02/08 00:00:00', initialSet:false }
+      ];
+      function refreshAccountOptions() {
+        entryMethod.innerHTML = '<option value=\"\">请选择</option>';
+        accountsData.forEach(a => {
+          const opt = document.createElement('option');
+          opt.value = a.name; opt.textContent = a.name;
+          entryMethod.appendChild(opt);
+        });
+      }
+      function renderAccounts() {
+        accRows.innerHTML = '';
+        accountsData.forEach((a, idx) => {
+          const tr = document.createElement('tr');
+          const ops = document.createElement('td');
+          ops.className = 'actions';
+          const edit = document.createElement('a'); edit.href='#'; edit.textContent='编辑'; edit.className='link-blue';
+          const del = document.createElement('a'); del.href='#'; del.textContent='删除'; del.className='link-red';
+          ops.append(edit, document.createTextNode(' '), del);
+          if (!a.initialSet) {
+            const initBtn = document.createElement('a');
+            initBtn.href='#'; initBtn.textContent='初始设置'; initBtn.className='link-orange';
+            ops.append(document.createTextNode(' '), initBtn);
+            initBtn.addEventListener('click', e => {
+              e.preventDefault();
+              pendingAccInitIndex = idx;
+              accInitAmount.value = '';
+              accInitModal.style.display = 'flex';
+            });
+          }
+          [a.name, a.balance.toFixed(2), a.desc || '', a.created].forEach(v => { const td = document.createElement('td'); td.textContent = v; tr.appendChild(td); });
+          tr.appendChild(ops);
+          accRows.appendChild(tr);
+          edit.addEventListener('click', e => {
+            e.preventDefault();
+            const newName = prompt('账户名称', a.name) || a.name;
+            const newDesc = prompt('账户说明', a.desc || '') ?? a.desc;
+            const oldName = a.name;
+            a.name = newName.trim() || a.name;
+            a.desc = (newDesc || '').trim();
+            records.forEach(r => { if (r.method === oldName) r.method = a.name; });
+            refreshAccountOptions();
+            renderAccounts();
+          });
+          del.addEventListener('click', e => {
+            e.preventDefault();
+            const used = records.some(r => r.method === a.name);
+            if (used) { alert('该账户已被记录使用，无法删除'); return; }
+            accountsData.splice(idx,1);
+            refreshAccountOptions();
+            renderAccounts();
+          });
+        });
+      }
+      const accInitModal = document.getElementById('acc-init-modal');
+      const accInitAmount = document.getElementById('acc-init-amount');
+      const accInitCancel = document.getElementById('acc-init-cancel');
+      const accInitOk = document.getElementById('acc-init-ok');
+      let pendingAccInitIndex = null;
+      accInitCancel?.addEventListener('click', () => {
+        accInitModal.style.display = 'none';
+        pendingAccInitIndex = null;
+      });
+      accInitOk?.addEventListener('click', () => {
+        if (pendingAccInitIndex != null) {
+          const amt = parseFloat(accInitAmount.value || '0');
+          if (isNaN(amt)) return;
+          accountsData[pendingAccInitIndex].balance = amt;
+          accountsData[pendingAccInitIndex].initialSet = true;
+          accInitModal.style.display = 'none';
+          pendingAccInitIndex = null;
+          renderAccounts();
+        }
+      });
+      const clientDD = document.getElementById('client-dd');
+      const clientSearch = document.getElementById('client-search');
+      const clientList = document.getElementById('client-list');
+      const clientPlus = document.getElementById('client-plus');
+      const clientWrap = document.getElementById('client-wrap');
+      const clientModal = document.getElementById('client-modal');
+      const clientModalForm = document.getElementById('client-modal-form');
+      const clientCancel = document.getElementById('client-cancel');
+      let clientModalTab = 'customers';
+      const fileViewer = document.getElementById('file-viewer');
+      const fileViewerBox = document.getElementById('file-viewer-box');
+      function allContacts() {
+        return [...contactsData.customers, ...contactsData.merchants, ...contactsData.others];
+      }
+      function renderClientDropdown() {
+        const q = (clientSearch.value || '').trim();
+        const data = allContacts().filter(x => {
+          if (!q) return true;
+          return [x.name,x.contact,x.phone,x.city,(x.remark||'')].some(v => (v||'').includes(q));
+        });
+        clientList.innerHTML = '';
+        data.forEach(item => {
+          const row = document.createElement('div');
+          row.className = 'dd-item';
+          const left = document.createElement('div');
+          left.textContent = item.name;
+          const right = document.createElement('div');
+          right.style.color = '#94a3b8';
+          right.textContent = `${item.contact || ''} ${item.phone || ''} ${item.city || ''}`.trim();
+          row.append(left, right);
+          row.addEventListener('click', () => {
+            entryClient.value = item.name;
+            clientDD.style.display = 'none';
+          });
+          clientList.appendChild(row);
+        });
+      }
+      function openClientDropdown() {
+        clientDD.style.display = 'block';
+        clientSearch.value = '';
+        renderClientDropdown();
+        clientSearch.focus();
+      }
+      entryClient.addEventListener('focus', openClientDropdown);
+      entryClient.addEventListener('click', openClientDropdown);
+      clientSearch.addEventListener('input', renderClientDropdown);
+      document.addEventListener('click', (e) => {
+        if (!clientWrap.contains(e.target)) clientDD.style.display = 'none';
+      });
+      clientPlus?.addEventListener('click', () => {
+        clientDD.style.display = 'none';
+        clientModal.style.display = 'flex';
+        clientModalTab = 'customers';
+        document.querySelectorAll('.pill').forEach(p => p.classList.toggle('active', p.getAttribute('data-target') === clientModalTab));
+      });
+      document.querySelectorAll('.pill[data-target]').forEach(p => {
+        p.addEventListener('click', () => {
+          clientModalTab = p.getAttribute('data-target');
+          document.querySelectorAll('.pill').forEach(x => x.classList.remove('active'));
+          p.classList.add('active');
+        });
+      });
+      clientCancel?.addEventListener('click', () => {
+        clientModal.style.display = 'none';
+      });
+      clientModalForm?.addEventListener('submit', e => {
+        e.preventDefault();
+        const name = document.getElementById('m-name').value.trim();
+        const company = document.getElementById('m-company').value.trim();
+        const code = document.getElementById('m-code').value.trim();
+        const contact = document.getElementById('m-contact').value.trim();
+        const phone = document.getElementById('m-phone').value.trim();
+        const country = document.getElementById('m-country').value.trim();
+        const address = document.getElementById('m-address').value.trim();
+        const zip = document.getElementById('m-zip').value.trim();
+        const city = document.getElementById('m-city').value.trim();
+        const remark = document.getElementById('m-remark').value.trim();
+        if (!name || !contact || !phone) return;
+        const now = new Date();
+        const created = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+        const ownerLabel = clientModalTab==='customers'?'客户':clientModalTab==='merchants'?'商家':'其它';
+        contactsData[clientModalTab].push({ name, contact, phone, city, remark, owner: ownerLabel, created, company, code, country, address, zip });
+        ['m-name','m-company','m-code','m-contact','m-phone','m-country','m-address','m-zip','m-city','m-remark'].forEach(id => document.getElementById(id).value='');
+        clientModal.style.display = 'none';
+        entryClient.value = name;
+        renderClientDropdown();
+      });
+      fileViewer.addEventListener('click', (e) => {
+        if (e.target === fileViewer) fileViewer.style.display = 'none';
+      });
+      function getCatChildrenByName(name) {
+        const cat = categoriesData.find(c => c.name === name);
+        return cat ? cat.children : [];
+      }
+      function refreshLedgerTypeOptions() {
+        const prev = entryType.value;
+        entryType.innerHTML = '<option value="">请选择类型</option>';
+        categoriesData.forEach(c => {
+          const opt = document.createElement('option');
+          opt.value = c.name; opt.textContent = c.name;
+          entryType.appendChild(opt);
+        });
+        if (categoriesData.some(c => c.name === prev)) entryType.value = prev;
+      }
+      function setCategories() {
+        const t = entryType.value;
+        const list = getCatChildrenByName(t);
+        const prev = entryCategory.value;
+        entryCategory.innerHTML = '<option value="">请选择子类目</option>';
+        list.forEach(c => {
+          const opt = document.createElement('option');
+          opt.value = c; opt.textContent = c;
+          entryCategory.appendChild(opt);
+        });
+        if (list.includes(prev)) entryCategory.value = prev;
+      }
+      entryType.addEventListener('change', setCategories);
+      function render(data) {
+        rows.innerHTML = '';
+        if (!data.length) {
+          const tr = document.createElement('tr');
+          tr.className = 'empty';
+          const td = document.createElement('td');
+          td.colSpan = 9;
+          td.textContent = '暂无流水记录';
+          tr.appendChild(td);
+          rows.appendChild(tr);
+          return;
+        }
+        for (const r of data) {
+          const tr = document.createElement('tr');
+          const amt = (r.type === '开支' || r.type === '支出') ? (-r.amount).toFixed(2) : r.amount.toFixed(2);
+          const cols = [];
+          cols.push(r.type);
+          cols.push(r.category);
+          cols.push(r.client || '');
+          cols.push(amt);
+          cols.push(r.method || '');
+          cols.push('FILE_RENDER'); // placeholder
+          cols.push(r.entry || '');
+          cols.push(r.notes || '');
+          cols.push(r.date);
+          cols.forEach((v, i) => {
+            const td = document.createElement('td');
+            if (i === 5) {
+              if (r.fileUrl) {
+                if ((r.fileType || '').includes('pdf') || /\.pdf$/i.test(r.fileName||'')) {
+                  const span = document.createElement('span');
+                  span.className = 'thumb-pdf';
+                  span.textContent = 'PDF';
+                  span.addEventListener('click', () => {
+                    fileViewerBox.innerHTML = '';
+                    const emb = document.createElement('embed');
+                    emb.src = r.fileUrl;
+                    emb.type = 'application/pdf';
+                    fileViewerBox.appendChild(emb);
+                    fileViewer.style.display = 'flex';
+                  });
+                  td.appendChild(span);
+                } else {
+                  const img = document.createElement('img');
+                  img.className = 'thumb-img';
+                  img.src = r.fileUrl;
+                  img.alt = r.fileName || '附件';
+                  img.addEventListener('click', () => {
+                    fileViewerBox.innerHTML = '';
+                    const full = document.createElement('img');
+                    full.src = r.fileUrl;
+                    fileViewerBox.appendChild(full);
+                    fileViewer.style.display = 'flex';
+                  });
+                  td.appendChild(img);
+                }
+              } else {
+                td.textContent = r.file || '';
+              }
+            } else {
+              td.textContent = v;
+            }
+            tr.appendChild(td);
+          });
+          if (r.type === '收入') tr.classList.add('row-income');
+          if (r.type === '开支' || r.type === '支出') tr.classList.add('row-expense');
+          rows.appendChild(tr);
+        }
+      }
+      function getFilters() {
+        const t = filterType.value;
+        const key = filterKey.value.trim();
+        const s = filterStart.value ? new Date(filterStart.value) : null;
+        const e = filterEnd.value ? new Date(filterEnd.value) : null;
+        return { t, key, s, e };
+      }
+      function applyFilters() {
+        const { t, key, s, e } = getFilters();
+        const out = records.filter(r => {
+          if (t !== 'all' && r.type !== t) return false;
+          if (key && !((r.client||'').includes(key) || (r.notes||'').includes(key))) return false;
+          const d = new Date(r.date);
+          if (s && d < s) return false;
+          if (e && d > e) return false;
+          return true;
+        });
+        render(out);
+      }
+      filterKey.addEventListener('input', applyFilters);
+      filterType.addEventListener('change', applyFilters);
+      filterStart.addEventListener('change', applyFilters);
+      filterEnd.addEventListener('change', applyFilters);
+      document.getElementById('entry-form').addEventListener('submit', e => {
+        e.preventDefault();
+        const type = entryType.value;
+        const category = entryCategory.value;
+        const amount = parseFloat(entryAmount.value);
+        const method = entryMethod.value;
+        if (!type || !category || !amount || !method) return;
+        const fileObj = entryFile.files[0] || null;
+        const file = fileObj ? fileObj.name : '';
+        const now = new Date();
+        const date = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+        const rec = { type, category, client: entryClient.value.trim(), amount, method, file, entry:'手动', notes: entryNotes.value.trim(), date };
+        if (fileObj) {
+          const extOk = /(\.jpe?g|\.pdf)$/i.test(fileObj.name);
+          if (!extOk) { alert('仅支持 JPG 或 PDF 文件'); return; }
+          rec.fileType = fileObj.type || '';
+          rec.fileName = fileObj.name;
+          rec.fileUrl = URL.createObjectURL(fileObj);
+        }
+        records.push(rec);
+        const acc = accountsData.find(a => a.name === method);
+        if (acc) {
+          if (type === '收入') acc.balance += amount;
+          if (type === '开支' || type === '支出') acc.balance -= amount;
+          renderAccounts();
+        }
+        entryClient.value = '';
+        entryAmount.value = '';
+        entryMethod.value = '';
+        entryFile.value = '';
+        entryNotes.value = '';
+        applyFilters();
+      });
+      const payRows = document.getElementById('pay-rows');
+      const payType = document.getElementById('pay-type');
+      const payPartner = document.getElementById('pay-partner');
+      const partnerAdd = document.getElementById('partner-add');
+      const payDoc = document.getElementById('pay-doc');
+      const payAmount = document.getElementById('pay-amount');
+      const payTrust = document.getElementById('pay-trust');
+      const payNotes = document.getElementById('pay-notes');
+      const payForm = document.getElementById('pay-form');
+      const sumRecvEl = document.getElementById('sum-recv');
+      const sumPayEl = document.getElementById('sum-pay');
+      const payFilterKey = document.getElementById('pay-filter-key');
+      const typeSwitch = document.getElementById('type-switch');
+      const typeItems = typeSwitch ? typeSwitch.querySelectorAll('.type-item') : [];
+      function setPayType(val) {
+        payType.value = val;
+        typeItems.forEach(btn => {
+          const is = btn.getAttribute('data-type') === val;
+          btn.classList.toggle('active', is);
+          btn.classList.toggle('recv', is && val === '应收账款');
+          btn.classList.toggle('pay', is && val === '应付账款');
+        });
+      }
+      typeItems.forEach(btn => {
+        btn.addEventListener('click', () => setPayType(btn.getAttribute('data-type')));
+      });
+      setPayType('应收账款');
+      const payWrap = document.getElementById('pay-wrap');
+      const payDD = document.getElementById('pay-dd');
+      const paySearch = document.getElementById('pay-search');
+      const payList = document.getElementById('pay-list');
+      partnerAdd?.addEventListener('click', () => {
+        const name = payPartner.value.trim();
+        if (!name) return;
+        if (!partners.includes(name)) partners.push(name);
+      });
+      function renderPayDropdown() {
+        const q = (paySearch.value || '').trim();
+        const data = allContacts().filter(x => {
+          if (!q) return true;
+          return [x.name,x.contact,x.phone,x.city,(x.remark||'')].some(v => (v||'').includes(q));
+        });
+        payList.innerHTML = '';
+        data.forEach(item => {
+          const row = document.createElement('div');
+          row.className = 'dd-item';
+          const left = document.createElement('div');
+          left.textContent = item.name;
+          const right = document.createElement('div');
+          right.style.color = '#94a3b8';
+          right.textContent = `${item.contact || ''} ${item.phone || ''} ${item.city || ''}`.trim();
+          row.append(left, right);
+          row.addEventListener('click', () => {
+            payPartner.value = item.name;
+            payDD.style.display = 'none';
+          });
+          payList.appendChild(row);
+        });
+      }
+      function openPayDropdown() {
+        payDD.style.display = 'block';
+        paySearch.value = '';
+        renderPayDropdown();
+        paySearch.focus();
+      }
+      payPartner.addEventListener('focus', openPayDropdown);
+      payPartner.addEventListener('click', openPayDropdown);
+      paySearch.addEventListener('input', renderPayDropdown);
+      document.addEventListener('click', (e) => {
+        if (!payWrap?.contains(e.target)) payDD.style.display = 'none';
+      });
+      function renderPayables() {
+        let recv = 0, pay = 0;
+        for (const r of payRecords) {
+          if (r.settled) continue;
+          if (/应收/.test(r.type)) recv += r.amount || 0;
+          else if (/应付/.test(r.type)) pay += r.amount || 0;
+        }
+        if (sumRecvEl) sumRecvEl.textContent = recv.toFixed(2);
+        if (sumPayEl) sumPayEl.textContent = pay.toFixed(2);
+        const key = (payFilterKey?.value || '').trim();
+        const list = payRecords.filter(r => {
+          if (!key) return true;
+          return [r.partner||'', r.doc||'', r.notes||''].some(v => v.includes(key));
+        });
+        payRows.innerHTML = '';
+        if (!list.length) {
+          const tr = document.createElement('tr');
+          tr.className = 'empty';
+          const td = document.createElement('td'); td.colSpan = 7; td.textContent = '暂无记录';
+          tr.appendChild(td); payRows.appendChild(tr);
+          return;
+        }
+        for (const r of list) {
+          const tr = document.createElement('tr');
+          const typeDisplay = /应收/.test(r.type) ? '应收' : '应付';
+          const trustDaysVal = r.trustDays ?? null;
+          const createLabel = (d) => {
+            if (d === 0) return '立即付款';
+            if (d === 30) return '30天';
+            if (d === 60) return '60天';
+            if (d === 90) return '90天';
+            if (d === 180) return '半年';
+            if (d === 365) return '一年';
+            return d != null ? `${d}天` : '';
+          };
+          let trustLabel = createLabel(trustDaysVal);
+          let isOverdue = false;
+          if (!r.settled && trustDaysVal != null && trustDaysVal > 0) {
+            const start = new Date(r.date);
+            const now = new Date();
+            const diffDays = Math.floor((now - start) / (1000*60*60*24));
+            const overdueDays = diffDays - trustDaysVal;
+            if (overdueDays > 0) {
+              trustLabel = `已逾期${overdueDays}天`;
+              isOverdue = true;
+            }
+          }
+          const cells = [typeDisplay, r.partner || '', r.doc || '', (r.amount||0).toFixed(2), trustLabel, r.notes || '', r.date];
+          cells.forEach((v, i) => {
+            const td = document.createElement('td');
+            td.textContent = v;
+            if (i === 4 && isOverdue) td.classList.add('overdue');
+            tr.appendChild(td);
+          });
+          if (r.settled) tr.classList.add('pay-row-settled');
+          else if (typeDisplay === '应收') tr.classList.add('pay-row-recv');
+          else tr.classList.add('pay-row-pay');
+          payRows.appendChild(tr);
+        }
+      }
+      payFilterKey?.addEventListener('input', renderPayables);
+      payForm?.addEventListener('submit', e => {
+        e.preventDefault();
+        const type = payType.value;
+        const partner = payPartner.value.trim();
+        const doc = payDoc.value.trim();
+        const amount = parseFloat(payAmount.value);
+        const trustDays = parseInt(payTrust.value || '0', 10);
+        const notes = payNotes.value.trim();
+        if (!type || !partner || !amount) return;
+        const now = new Date();
+        const date = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+        payRecords.push({ type, partner, doc, amount, trustDays, notes, date, settled:false });
+        payPartner.value = '';
+        payDoc.value = '';
+        payAmount.value = '';
+        payTrust.value = '30';
+        payNotes.value = '';
+        renderPayables();
+        renderContacts();
+      });
+      let contactsTab = 'customers';
+      const contactsRows = document.getElementById('contacts-rows');
+      const contactsSearch = document.getElementById('contacts-search');
+      const confirmModal = document.getElementById('confirm-modal');
+      const confirmCancel = document.getElementById('confirm-cancel');
+      const confirmOk = document.getElementById('confirm-ok');
+      let pendingDeleteIndex = null;
+      let pendingDeleteTab = null;
+      function partnerTotal(name) {
+        let sum = 0;
+        payRecords.forEach(r => { if ((r.partner||'') === name) sum += r.amount || 0; });
+        return sum.toFixed(2);
+      }
+      function renderContacts() {
+        const list = contactsData[contactsTab] || [];
+        const key = (contactsSearch?.value || '').trim();
+        const data = list.filter(x => {
+          if (!key) return true;
+          return [x.name,x.contact,x.phone,x.city,x.remark].some(v => (v||'').includes(key));
+        });
+        contactsRows.innerHTML = '';
+        for (const r of data) {
+          const tr = document.createElement('tr');
+          const ops = document.createElement('td');
+          ops.className = 'actions';
+          ops.innerHTML = '<a href="#" class="link-blue">编辑</a><a href="#" class="link-red">删除</a><a href="#ledger" class="link-green">查看近期记录</a>';
+          const cells = [r.name, r.company || '', r.code || '', r.contact, r.phone, r.city, r.remark || '', partnerTotal(r.name), r.created];
+          for (const v of cells) { const td = document.createElement('td'); td.textContent = v; tr.appendChild(td); }
+          tr.appendChild(ops);
+          contactsRows.appendChild(tr);
+          const del = ops.querySelector('.link-red');
+          del.addEventListener('click', e => {
+            e.preventDefault();
+            pendingDeleteIndex = contactsData[contactsTab].indexOf(r);
+            pendingDeleteTab = contactsTab;
+            confirmModal.style.display = 'flex';
+          });
+          const edit = ops.querySelector('.link-blue');
+          edit.addEventListener('click', e => {
+            e.preventDefault();
+            const i = contactsData[contactsTab].indexOf(r);
+            if (i>=0) {
+              editingIndex = i;
+              editingTab = contactsTab;
+              fillContactsForm(r);
+              ctSubmitBtn.textContent = '保存';
+            }
+          });
+        }
+      }
+      confirmCancel?.addEventListener('click', () => {
+        confirmModal.style.display = 'none';
+        pendingDeleteIndex = null;
+        pendingDeleteTab = null;
+      });
+      confirmOk?.addEventListener('click', () => {
+        if (pendingDeleteIndex !== null && pendingDeleteTab) {
+          contactsData[pendingDeleteTab].splice(pendingDeleteIndex,1);
+          renderContacts();
+        }
+        confirmModal.style.display = 'none';
+        pendingDeleteIndex = null;
+        pendingDeleteTab = null;
+      });
+      document.querySelectorAll('.tab[data-tab]').forEach(b => {
+        b.addEventListener('click', () => {
+          document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+          b.classList.add('active');
+          contactsTab = b.getAttribute('data-tab');
+          renderContacts();
+        });
+      });
+      contactsSearch?.addEventListener('input', renderContacts);
+      const ctForm = document.getElementById('contacts-form');
+      const ctSubmitBtn = document.getElementById('contacts-submit');
+      let editingIndex = null;
+      let editingTab = null;
+      function fillContactsForm(r) {
+        document.getElementById('ct-name').value = r.name || '';
+        document.getElementById('ct-company').value = r.company || '';
+        document.getElementById('ct-code').value = r.code || '';
+        document.getElementById('ct-contact').value = r.contact || '';
+        document.getElementById('ct-phone').value = r.phone || '';
+        document.getElementById('ct-country').value = r.country || '';
+        document.getElementById('ct-address').value = r.address || '';
+        document.getElementById('ct-zip').value = r.zip || '';
+        document.getElementById('ct-city').value = r.city || '';
+        document.getElementById('ct-remark').value = r.remark || '';
+      }
+      function clearContactsForm() {
+        ['ct-name','ct-company','ct-code','ct-contact','ct-phone','ct-country','ct-address','ct-zip','ct-city','ct-remark'].forEach(id => document.getElementById(id).value='');
+      }
+      ctForm?.addEventListener('submit', e => {
+        e.preventDefault();
+        const name = document.getElementById('ct-name').value.trim();
+        const company = document.getElementById('ct-company').value.trim();
+        const code = document.getElementById('ct-code').value.trim();
+        const contact = document.getElementById('ct-contact').value.trim();
+        const phone = document.getElementById('ct-phone').value.trim();
+        const country = document.getElementById('ct-country').value.trim();
+        const address = document.getElementById('ct-address').value.trim();
+        const zip = document.getElementById('ct-zip').value.trim();
+        const city = document.getElementById('ct-city').value.trim();
+        const remark = document.getElementById('ct-remark').value.trim();
+        if (!name || !contact || !phone) return;
+        if (editingIndex !== null) {
+          const target = contactsData[editingTab][editingIndex];
+          target.name = name;
+          target.company = company;
+          target.code = code;
+          target.contact = contact;
+          target.phone = phone;
+          target.country = country;
+          target.address = address;
+          target.zip = zip;
+          target.city = city;
+          target.remark = remark;
+          editingIndex = null;
+          editingTab = null;
+          ctSubmitBtn.textContent = '新增';
+        } else {
+          const now = new Date();
+          const created = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+          contactsData[contactsTab].push({ name, contact, phone, city, remark, owner: contactsTab==='customers'?'客户':contactsTab==='merchants'?'商家':'其它', created, company, code, country, address, zip });
+        }
+        clearContactsForm();
+        renderContacts();
+      });
+      const catList = document.getElementById('cat-list');
+      const addCatBtn = document.getElementById('add-cat');
+      const categoriesData = [
+        { name:'收入', children:['服务收入(现金)','服务收入(银行)','银行储蓄','现金借贷','订单收入','其它收入'] },
+        { name:'开支', children:['现金开支','员工工资','出差补贴','人工开支','其它开支'] }
+      ];
+      function renderCats() {
+        catList.innerHTML = '';
+        categoriesData.forEach((cat, idx) => {
+          const panel = document.createElement('div');
+          panel.className = 'cat-panel';
+          const header = document.createElement('div');
+          header.className = 'cat-header';
+          const title = document.createElement('div');
+          title.className = 'cat-title';
+          title.textContent = '— ' + cat.name;
+          const actions = document.createElement('div');
+          actions.className = 'cat-actions';
+          const addBtn = document.createElement('button'); addBtn.className = 'btn-icon btn-green'; addBtn.textContent = '+'; addBtn.title = '新增二级类目';
+          const editBtn = document.createElement('button'); editBtn.className = 'btn-icon btn-blue'; editBtn.textContent = '✎'; editBtn.title = '编辑一级类目';
+          const delBtn = document.createElement('button'); delBtn.className = 'btn-icon btn-red'; delBtn.textContent = '🗑'; delBtn.title = '删除一级类目';
+          actions.append(addBtn, editBtn, delBtn);
+          header.append(title, actions);
+          const items = document.createElement('div');
+          items.className = 'cat-items';
+          cat.children.forEach((name, j) => {
+            const row = document.createElement('div');
+            row.className = 'cat-item';
+            const nm = document.createElement('div'); nm.className = 'cat-name'; nm.textContent = name;
+            const ops = document.createElement('div'); ops.className = 'cat-actions';
+            const e = document.createElement('button'); e.className = 'btn-icon btn-blue'; e.textContent = '✎'; e.title = '编辑';
+            const d = document.createElement('button'); d.className = 'btn-icon btn-red'; d.textContent = '🗑'; d.title = '删除';
+            ops.append(e, d);
+            row.append(nm, ops);
+            items.appendChild(row);
+            e.addEventListener('click', () => {
+              const val = prompt('编辑名称', name);
+              if (val && val.trim()) { categoriesData[idx].children[j] = val.trim(); renderCats(); }
+            });
+            d.addEventListener('click', () => {
+              categoriesData[idx].children.splice(j,1);
+              renderCats();
+            });
+          });
+          panel.append(header, items);
+          catList.appendChild(panel);
+          addBtn.addEventListener('click', () => {
+            const val = prompt('新增二级类目名称');
+            if (val && val.trim()) { categoriesData[idx].children.push(val.trim()); renderCats(); }
+          });
+          editBtn.addEventListener('click', () => {
+            const val = prompt('编辑一级类目名称', cat.name);
+            if (val && val.trim()) { categoriesData[idx].name = val.trim(); renderCats(); }
+          });
+          delBtn.addEventListener('click', () => {
+            if (confirm('确定删除该一级类目？')) { categoriesData.splice(idx,1); renderCats(); }
+          });
+        });
+        refreshLedgerTypeOptions();
+        setCategories();
+      }
+      addCatBtn?.addEventListener('click', () => {
+        const val = prompt('新增一级类目名称');
+        if (val && val.trim()) { categoriesData.push({ name: val.trim(), children: [] }); renderCats(); }
+      });
+      const roleRows = document.getElementById('role-rows');
+      const roleSearch = document.getElementById('role-search');
+      const rolePageSize = document.getElementById('role-page-size');
+      const rolePrev = document.getElementById('role-prev');
+      const roleNext = document.getElementById('role-next');
+      const rolePageEl = document.getElementById('role-page');
+      const roleSummary = document.getElementById('role-summary');
+      const roleCreate = document.getElementById('role-create');
+      const roleModal = document.getElementById('role-modal');
+      const roleForm = document.getElementById('role-form');
+      const roleCancel = document.getElementById('role-cancel');
+      const rolesData = [
+        { id:1, name:'超级管理员', desc:'超级管理员不可删除，不可修改', created:'2022-01-29 07:40:15', immutable:true }
+      ];
+      let rolePage = 1;
+      function renderRoles() {
+        const key = (roleSearch?.value || '').trim();
+        const size = parseInt(rolePageSize?.value || '10', 10);
+        const data = rolesData.filter(r => {
+          if (!key) return true;
+          return [r.name, r.desc, String(r.id)].some(v => (v||'').includes(key));
+        }).sort((a,b)=>b.id-a.id);
+        const total = data.length;
+        const totalPages = Math.max(1, Math.ceil(total/size));
+        if (rolePage > totalPages) rolePage = totalPages;
+        const start = (rolePage-1)*size;
+        const pageData = data.slice(start, start+size);
+        roleRows.innerHTML = '';
+        pageData.forEach(r => {
+          const tr = document.createElement('tr');
+          [r.id, r.name, r.desc, r.created].forEach(v => { const td = document.createElement('td'); td.textContent = v; tr.appendChild(td); });
+          const ops = document.createElement('td'); ops.className='actions';
+          if (r.immutable) {
+            const tip = document.createElement('span'); tip.className='tag'; tip.textContent='不可编辑/删除';
+            ops.appendChild(tip);
+          } else {
+            const edit = document.createElement('a'); edit.href='#'; edit.textContent='编辑'; edit.className='link-blue';
+            const del = document.createElement('a'); del.href='#'; del.textContent='删除'; del.className='link-red';
+            ops.append(edit, document.createTextNode(' '), del);
+            edit.addEventListener('click', e => {
+              e.preventDefault();
+              const newName = prompt('角色名称', r.name) || r.name;
+              const newDesc = prompt('角色描述', r.desc || '') ?? r.desc;
+              r.name = newName.trim() || r.name;
+              r.desc = (newDesc || '').trim();
+              renderRoles();
+            });
+            del.addEventListener('click', e => {
+              e.preventDefault();
+              const i = rolesData.indexOf(r);
+              if (i>=0) { rolesData.splice(i,1); renderRoles(); }
+            });
+          }
+          tr.appendChild(ops);
+          roleRows.appendChild(tr);
+        });
+        roleSummary.textContent = `显示 ${Math.min(total,start+1)} 到 ${Math.min(total,start+pageData.length)} 项，共 ${total} 项`;
+        rolePageEl.textContent = String(rolePage);
+      }
+      roleSearch?.addEventListener('input', () => { rolePage = 1; renderRoles(); });
+      rolePageSize?.addEventListener('change', () => { rolePage = 1; renderRoles(); });
+      rolePrev?.addEventListener('click', () => { if (rolePage > 1) { rolePage--; renderRoles(); } });
+      roleNext?.addEventListener('click', () => {
+        const size = parseInt(rolePageSize?.value || '10',10);
+        const totalPages = Math.max(1, Math.ceil(rolesData.filter(r => (roleSearch?.value||'') ? [r.name,r.desc,String(r.id)].some(v => v.includes(roleSearch.value)) : true).length/size));
+        if (rolePage < totalPages) { rolePage++; renderRoles(); }
+      });
+      roleCreate?.addEventListener('click', () => {
+        roleModal.style.display = 'flex';
+        document.getElementById('r-name').value='';
+        document.getElementById('r-desc').value='';
+      });
+      roleCancel?.addEventListener('click', () => { roleModal.style.display = 'none'; });
+      roleForm?.addEventListener('submit', e => {
+        e.preventDefault();
+        const name = document.getElementById('r-name').value.trim();
+        const desc = document.getElementById('r-desc').value.trim();
+        if (!name) return;
+        const maxId = rolesData.reduce((m,r)=>Math.max(m,r.id),0);
+        const now = new Date();
+        const created = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+        rolesData.push({ id:maxId+1, name, desc, created, immutable:false });
+        roleModal.style.display = 'none';
+        rolePage = 1;
+        renderRoles();
+      });
+      const userRows = document.getElementById('user-rows');
+      const userSearch = document.getElementById('user-search');
+      const userPageSize = document.getElementById('user-page-size');
+      const userPrev = document.getElementById('user-prev');
+      const userNext = document.getElementById('user-next');
+      const userPageEl = document.getElementById('user-page');
+      const userSummary = document.getElementById('user-summary');
+      const userCreate = document.getElementById('user-create');
+      const userModal = document.getElementById('user-modal');
+      const userForm = document.getElementById('user-form');
+      const userCancel = document.getElementById('user-cancel');
+      const userAccounts = [
+        { id:2, name:'shuangqun', role:'股东', created:'2022-02-02 10:31:22', enabled:true },
+        { id:1, name:'aaaaaa', role:'超级管理员', created:'2022-01-29 07:40:15', enabled:true, password:'999000' },
+      ];
+      (function syncInitialPasswords(){
+        const m = getPwdMap();
+        userAccounts.forEach(u => { if (u.password) m[u.name] = u.password; });
+        setPwdMap(m);
+      })();
+      let userPage = 1;
+      function renderUserAccounts() {
+        const key = (userSearch?.value || '').trim();
+        const size = parseInt(userPageSize?.value || '10', 10);
+        const data = userAccounts.filter(u => {
+          if (!key) return true;
+          return [u.name, u.role, String(u.id)].some(v => (v||'').includes(key));
+        }).sort((a,b)=>b.id-a.id);
+        const total = data.length;
+        const totalPages = Math.max(1, Math.ceil(total/size));
+        if (userPage > totalPages) userPage = totalPages;
+        const start = (userPage-1)*size;
+        const pageData = data.slice(start, start+size);
+        if (!userRows) return;
+        userRows.innerHTML = '';
+        pageData.forEach(u => {
+          const tr = document.createElement('tr');
+          const cells = [u.id, u.name, u.role, u.created];
+          cells.forEach(v => { const td = document.createElement('td'); td.textContent = v; tr.appendChild(td); });
+          const tdStatus = document.createElement('td');
+          const sw = document.createElement('div'); sw.className = 'switch' + (u.enabled ? '' : ' off');
+          const btn = document.createElement('button'); btn.textContent = u.enabled ? 'ON' : 'OFF';
+          btn.addEventListener('click', () => { u.enabled = !u.enabled; renderUserAccounts(); });
+          sw.appendChild(btn); tdStatus.appendChild(sw); tr.appendChild(tdStatus);
+          const tdOps = document.createElement('td');
+          const reset = document.createElement('a'); reset.href='#'; reset.textContent='重置密码'; reset.className='link-blue';
+          reset.addEventListener('click', e => {
+            e.preventDefault();
+            pendingResetUser = u;
+            const np = u.name === 'aaaaaa' ? '999000' : '111111';
+            resetMsg.textContent = `已经将帐号 ${u.name} 密码重置，重置后密码为“${np}”`;
+            resetModal.style.display = 'flex';
+          });
+          tdOps.appendChild(reset); tr.appendChild(tdOps);
+          userRows.appendChild(tr);
+        });
+        if (userSummary) userSummary.textContent = `显示 ${Math.min(total,start+1)} 到 ${Math.min(total,start+pageData.length)} 项，共 ${total} 项`;
+        if (userPageEl) userPageEl.textContent = String(userPage);
+      }
+      userSearch?.addEventListener('input', () => { userPage = 1; renderUserAccounts(); });
+      userPageSize?.addEventListener('change', () => { userPage = 1; renderUserAccounts(); });
+      userPrev?.addEventListener('click', () => { if (userPage > 1) { userPage--; renderUserAccounts(); } });
+      userNext?.addEventListener('click', () => {
+        const size = parseInt(userPageSize?.value || '10',10);
+        const totalPages = Math.max(1, Math.ceil(userAccounts.filter(u => (userSearch?.value||'') ? [u.name,u.role,String(u.id)].some(v => v.includes(userSearch.value)) : true).length/size));
+        if (userPage < totalPages) { userPage++; renderUserAccounts(); }
+      });
+      userCreate?.addEventListener('click', () => { userModal.style.display = 'flex'; document.getElementById('u-name').value=''; document.getElementById('u-role').value=''; });
+      userCancel?.addEventListener('click', () => { userModal.style.display = 'none'; });
+      userForm?.addEventListener('submit', e => {
+        e.preventDefault();
+        const name = document.getElementById('u-name').value.trim();
+        const role = document.getElementById('u-role').value.trim() || '普通用户';
+        if (!name) return;
+        const maxId = userAccounts.reduce((m,u)=>Math.max(m,u.id),0);
+        const now = new Date();
+        const created = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+        userAccounts.push({ id:maxId+1, name, role, created, enabled:true });
+        userModal.style.display = 'none';
+        userPage = 1;
+        renderUserAccounts();
+      });
+      const logoutBtn = document.getElementById('logout-btn');
+      const authUserTag = document.getElementById('auth-user-tag');
+      const loginForm = document.getElementById('login-form');
+      const loginUser = document.getElementById('login-user');
+      const loginPass = document.getElementById('login-pass');
+      const loginMsg = document.getElementById('login-msg');
+      function getAuthUser() {
+        try { return JSON.parse(localStorage.getItem('authUser') || 'null'); } catch { return null; }
+      }
+      function setAuthUI() {
+        const u = getAuthUser();
+        if (u) {
+          authUserTag.style.display = 'inline-block';
+          authUserTag.textContent = '当前用户：' + u.name;
+          logoutBtn.style.display = 'block';
+        } else {
+          authUserTag.style.display = 'none';
+          logoutBtn.style.display = 'none';
+        }
+      }
+      function setAuthUser(u) {
+        if (u) localStorage.setItem('authUser', JSON.stringify(u));
+        else localStorage.removeItem('authUser');
+        setAuthUI();
+      }
+      function getPwdMap() {
+        try { return JSON.parse(localStorage.getItem('userPasswords') || '{}'); } catch { return {}; }
+      }
+      function setPwdMap(map) {
+        localStorage.setItem('userPasswords', JSON.stringify(map || {}));
+      }
+      const logoutModal = document.getElementById('logout-modal');
+      const logoutCancel = document.getElementById('logout-cancel');
+      const logoutOk = document.getElementById('logout-ok');
+      const resetModal = document.getElementById('reset-modal');
+      const resetMsg = document.getElementById('reset-msg');
+      const resetCancel = document.getElementById('reset-cancel');
+      const resetOk = document.getElementById('reset-ok');
+      let pendingResetUser = null;
+      logoutBtn?.addEventListener('click', () => {
+        logoutModal.style.display = 'flex';
+      });
+      logoutCancel?.addEventListener('click', () => {
+        logoutModal.style.display = 'none';
+      });
+      logoutOk?.addEventListener('click', () => {
+        logoutModal.style.display = 'none';
+        setAuthUser(null);
+        location.href = './login.html';
+      });
+      resetCancel?.addEventListener('click', () => {
+        resetModal.style.display = 'none';
+        pendingResetUser = null;
+      });
+      resetOk?.addEventListener('click', () => {
+        if (pendingResetUser) {
+          const np = pendingResetUser.name === 'aaaaaa' ? '999000' : '111111';
+          pendingResetUser.password = np;
+          const m = getPwdMap();
+          m[pendingResetUser.name] = np;
+          setPwdMap(m);
+        }
+        resetModal.style.display = 'none';
+        pendingResetUser = null;
+      });
+      loginForm?.addEventListener('submit', e => {
+        e.preventDefault();
+        const name = (loginUser.value || '').trim();
+        const pass = loginPass.value || '';
+        let ok = false;
+        if (name === 'aaaaaa' && pass === '999000') ok = true;
+        else {
+          const u = userAccounts.find(x => x.name === name);
+          if (u && u.password && pass === u.password) ok = true;
+        }
+        if (!ok) { loginMsg.style.display = 'inline-block'; return; }
+        loginMsg.style.display = 'none';
+        setAuthUser({ name });
+        location.hash = '#ledger';
+      });
+      function route() {
+        const hash = location.hash || '#ledger';
+        document.querySelectorAll('.nav a').forEach(a => a.classList.toggle('active', a.getAttribute('href') === hash));
+        const ledger = document.getElementById('page-ledger');
+        const payables = document.getElementById('page-payables');
+        const contacts = document.getElementById('page-contacts');
+        const categories = document.getElementById('page-categories');
+        const accounts = document.getElementById('page-accounts');
+        const userAccounts = document.getElementById('page-user-accounts');
+        const roleAccounts = document.getElementById('page-role-accounts');
+        const loginPage = document.getElementById('page-login');
+        const empty = document.getElementById('page-empty');
+        const authed = !!getAuthUser();
+        if (!authed) { location.href = './login.html'; return; }
+        if (hash === '#ledger') {
+          ledger.style.display = 'block';
+          payables.style.display = 'none';
+          contacts.style.display = 'none';
+          categories.style.display = 'none';
+          accounts.style.display = 'none';
+          userAccounts.style.display = 'none';
+          roleAccounts.style.display = 'none';
+          loginPage.style.display = 'none';
+          empty.style.display = 'none';
+        } else if (hash === '#payables') {
+          ledger.style.display = 'none';
+          payables.style.display = 'block';
+          contacts.style.display = 'none';
+          categories.style.display = 'none';
+          accounts.style.display = 'none';
+          userAccounts.style.display = 'none';
+          roleAccounts.style.display = 'none';
+          loginPage.style.display = 'none';
+          empty.style.display = 'none';
+          renderPayables();
+        } else if (hash === '#contacts') {
+          ledger.style.display = 'none';
+          payables.style.display = 'none';
+          contacts.style.display = 'block';
+          categories.style.display = 'none';
+          accounts.style.display = 'none';
+          userAccounts.style.display = 'none';
+          roleAccounts.style.display = 'none';
+          loginPage.style.display = 'none';
+          empty.style.display = 'none';
+          renderContacts();
+        } else if (hash === '#categories') {
+          ledger.style.display = 'none';
+          payables.style.display = 'none';
+          contacts.style.display = 'none';
+          categories.style.display = 'block';
+          accounts.style.display = 'none';
+          userAccounts.style.display = 'none';
+          roleAccounts.style.display = 'none';
+          loginPage.style.display = 'none';
+          empty.style.display = 'none';
+        } else if (hash === '#accounts') {
+          ledger.style.display = 'none';
+          payables.style.display = 'none';
+          contacts.style.display = 'none';
+          categories.style.display = 'none';
+          accounts.style.display = 'block';
+          userAccounts.style.display = 'none';
+          roleAccounts.style.display = 'none';
+          loginPage.style.display = 'none';
+          empty.style.display = 'none';
+        } else if (hash === '#user-accounts') {
+          ledger.style.display = 'none';
+          payables.style.display = 'none';
+          contacts.style.display = 'none';
+          categories.style.display = 'none';
+          accounts.style.display = 'none';
+          userAccounts.style.display = 'block';
+          roleAccounts.style.display = 'none';
+          loginPage.style.display = 'none';
+          empty.style.display = 'none';
+          renderUserAccounts();
+        } else if (hash === '#role-accounts') {
+          ledger.style.display = 'none';
+          payables.style.display = 'none';
+          contacts.style.display = 'none';
+          categories.style.display = 'none';
+          accounts.style.display = 'none';
+          userAccounts.style.display = 'none';
+          roleAccounts.style.display = 'block';
+          loginPage.style.display = 'none';
+          empty.style.display = 'none';
+          renderRoles();
+        } else if (hash === '#login') {
+          ledger.style.display = 'none';
+          payables.style.display = 'none';
+          contacts.style.display = 'none';
+          categories.style.display = 'none';
+          accounts.style.display = 'none';
+          userAccounts.style.display = 'none';
+          roleAccounts.style.display = 'none';
+          loginPage.style.display = 'block';
+          empty.style.display = 'none';
+        } else {
+          ledger.style.display = 'none';
+          payables.style.display = 'none';
+          contacts.style.display = 'none';
+          categories.style.display = 'none';
+          accounts.style.display = 'none';
+          userAccounts.style.display = 'none';
+          roleAccounts.style.display = 'none';
+          loginPage.style.display = 'none';
+          empty.style.display = 'block';
+        }
+      }
+      window.addEventListener('hashchange', route);
+      setAuthUI();
+      route();
+      render([]);
+      renderContacts();
+      renderCats();
+      refreshAccountOptions();
+      renderAccounts();
+      refreshLedgerTypeOptions();
+      setCategories();
+      renderPayables();
+      accAdd?.addEventListener('click', () => {
+        const name = prompt('账户名称');
+        if (!name || !name.trim()) return;
+        const desc = prompt('账户说明') || '';
+        const now = new Date();
+        const created = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+        accountsData.push({ name: name.trim(), balance:0, desc: desc.trim(), created, initialSet:false });
+        refreshAccountOptions();
+        renderAccounts();
+      });
+    </script>
+  </body>
+</html>

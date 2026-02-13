@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>KOMEYA 财务管理 · 登录</title>
+    <style>
+      :root { --bg1:#0ea5e9; --bg2:#3b82f6; --card:#ffffff; --text:#0f172a; --muted:#64748b; --blue:#2563eb; --line:#e5e7eb; }
+      * { box-sizing: border-box; }
+      html, body { height: 100%; }
+      body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "PingFang SC", "Noto Sans SC", "Microsoft Yahei", sans-serif; background: linear-gradient(135deg, var(--bg1), var(--bg2)); display:flex; align-items:center; justify-content:center; }
+      .wrap { width: min(1000px, 92vw); display:grid; grid-template-columns: 1fr 1fr; gap:0; background: var(--card); border-radius: 18px; box-shadow: 0 24px 64px rgba(0,0,0,0.2); border: 1px solid var(--line); overflow:hidden; }
+      .left { position:relative; padding:24px 28px; background: linear-gradient(180deg, #eff6ff, #ffffff); }
+      .hero { position:absolute; inset:0; padding:24px; display:flex; align-items:center; justify-content:center; }
+      .hero .circle { width:160px; height:160px; border-radius:50%; background:#dbeafe; position:absolute; left:50px; top:60px; }
+      .hero .circle2 { width:120px; height:120px; border-radius:50%; background:#bfdbfe; position:absolute; right:60px; bottom:80px; }
+      .hero .desk { width:70%; height:160px; background:#1e40af; border-radius:16px; opacity:0.1; }
+      .right { padding:36px 40px; display:flex; flex-direction:column; }
+      .brand { color: var(--blue); font-weight:700; font-size:28px; }
+      .sub { color: var(--muted); margin-top:4px; }
+      .form { margin-top:24px; display:flex; flex-direction:column; gap:14px; }
+      .label { font-size:13px; color: var(--muted); }
+      input { width:100%; padding:12px 14px; border:1px solid var(--line); border-radius:10px; outline:none; font-size:15px; }
+      input:focus { border-color: var(--blue); box-shadow:0 0 0 3px rgba(37,99,235,0.12); }
+      .btn { width:100%; padding:12px 14px; border:none; border-radius:10px; background: var(--blue); color:#fff; font-weight:600; cursor:pointer; }
+      .tip { margin-top:10px; font-size:13px; color: var(--muted); }
+      .error { margin-top:8px; padding:8px 10px; border:1px solid #fecaca; background:#fff1f2; color:#ef4444; border-radius:8px; display:none; }
+      .footer { margin-top:20px; color:#93c5fd; text-align:center; font-size:12px; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="left">
+        <div class="hero">
+          <div class="desk"></div>
+          <div class="circle"></div>
+          <div class="circle2"></div>
+        </div>
+      </div>
+      <div class="right">
+        <div class="brand">KOMEYA 财务管理</div>
+        <div class="sub">欢迎登录</div>
+        <form id="login-form" class="form">
+          <div>
+            <div class="label">账号</div>
+            <input id="login-user" type="text" placeholder="请输入账号">
+          </div>
+          <div>
+            <div class="label">密码</div>
+            <input id="login-pass" type="password" placeholder="请输入密码">
+          </div>
+          <button id="login-submit" class="btn" type="submit">登录</button>
+          <div id="login-error" class="error">账号或密码错误</div>
+          <div class="tip">提示：超级管理员账号为 aaaaaa</div>
+        </form>
+        <div class="footer">Copyright © KOMEYA</div>
+      </div>
+    </div>
+    <script>
+      const form = document.getElementById('login-form');
+      const u = document.getElementById('login-user');
+      const p = document.getElementById('login-pass');
+      const err = document.getElementById('login-error');
+      function setAuthUser(user) { if (user) localStorage.setItem('authUser', JSON.stringify(user)); else localStorage.removeItem('authUser'); }
+      function getPwdMap() { try { return JSON.parse(localStorage.getItem('userPasswords') || '{}'); } catch { return {}; } }
+      form.addEventListener('submit', e => {
+        e.preventDefault();
+        const name = (u.value || '').trim();
+        const pass = p.value || '';
+        let ok = false;
+        const map = getPwdMap();
+        if (name === 'aaaaaa' && pass === '999000') ok = true;
+        else if (map[name] && pass === map[name]) ok = true;
+        if (!ok) { err.style.display = 'block'; return; }
+        err.style.display = 'none';
+        setAuthUser({ name });
+        location.href = './index.html#ledger';
+      });
+    </script>
+  </body>
+  </html>
