@@ -60,6 +60,15 @@
       .light-btn { background:#1a73e8; color:#fff; border:none; border-radius:6px; padding:8px 12px; cursor:pointer; }
       .light-input { background:#fff; border:1px solid #cbd5e1; color:#0f172a; border-radius:6px; padding:8px 10px; }
       .light-select { background:#fff; border:1px solid #cbd5e1; color:#0f172a; border-radius:6px; padding:6px 8px; }
+      .table-scroll { max-height:70vh; overflow:auto; border:1px solid #e5e7eb; border-radius:10px; background:#fff; }
+      .preview-table { width:100%; min-width:1200px; border-collapse:separate; border-spacing:0; font-size:14px; table-layout:auto; }
+      .preview-table thead th { position:sticky; top:0; background:#eef2f7; color:#111827; padding:10px 12px; border-bottom:1px solid #e5e7eb; font-weight:600; }
+      .preview-table tbody td { padding:10px 12px; border-top:1px solid #edf2f7; color:#0f172a; white-space:nowrap; }
+      .preview-table thead th { white-space:nowrap; }
+      .preview-table tbody tr:nth-child(even) td { background:#f9fbff; }
+      .preview-table tbody tr:hover td { background:#f2f6ff; }
+      .error-cell { background:#fee2e2 !important; color:#7f1d1d !important; }
+      #pay-import-summary { font-weight:600; color:#0f172a; }
       .switch { display:inline-flex; align-items:center; gap:6px; }
       .switch button { background:#1a73e8; color:#fff; border:none; border-radius:999px; padding:4px 10px; cursor:pointer; font-size:12px; }
       .switch.off button { background:#64748b; }
@@ -110,7 +119,16 @@
       .type-item.active.recv { color:#22c55e; border-color:#14532d; box-shadow:0 0 0 1px #14532d inset; }
       .type-item.active.pay { color:#f97316; border-color:#7c2d12; box-shadow:0 0 0 1px #7c2d12 inset; }
       .overdue { color: var(--red) !important; font-weight:700; }
+      #ledger-table-wrap { scrollbar-width: none; -ms-overflow-style: none; }
+      #ledger-table-wrap::-webkit-scrollbar { display: none; }
+      #pay-table-wrap { scrollbar-width: none; -ms-overflow-style: none; }
+      #pay-table-wrap::-webkit-scrollbar { display: none; }
+      #global-pager { position:fixed; left:50%; transform:translateX(-50%); bottom:16px; z-index:60; display:flex; gap:16px; align-items:center; justify-content:center; padding:10px 12px; border:1px solid #334155; border-radius:8px; background:#0f172a; box-shadow:0 8px 24px rgba(0,0,0,0.35); }
+      #global-pager-controls { display:flex; gap:8px; align-items:center; }
+      #pay-footer-info { display:flex; gap:10px; align-items:center; }
+      .info-pill { padding:2px 8px; border:1px solid var(--line); border-radius:6px; color:#cbd5e1; background:transparent; font-size:12px; line-height:1.2; }
     </style>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   </head>
   <body>
     <div class="layout">
@@ -127,6 +145,7 @@
           <a href="#accounts">账户管理</a>
           <a href="#user-accounts">帐号管理</a>
           <a href="#role-accounts">角色管理</a>
+          <a href="#sales-accounts">业务员管理</a>
         </nav>
         <div id="auth-area" style="padding:12px; border-top:1px solid var(--line); margin-top:auto">
           <div id="auth-user-tag" class="tag" style="display:none; margin-bottom:8px"></div>
@@ -178,29 +197,49 @@
               <span class="label">关键词</span>
               <input id="filter-key" type="text" placeholder="搜索关键词">
             </div>
+            <div class="field">
+              <button id="ledger-clear" class="btn" type="button">清空记录</button>
+            </div>
           </div>
-          <div class="row">
+          <div class="row" id="ledger-row" style="display:grid; grid-template-columns:1fr 280px; gap:24px">
             <div class="card">
-              <div class="table-wrap">
-                <table>
-                  <thead>
+              <div class="table-wrap" id="ledger-table-wrap" style="max-height:calc(100vh - 220px); overflow:auto; position:relative; background:#0f172a; padding:0 16px 16px 16px">
+                <table style="border-collapse:collapse; border-spacing:0; width:100%">
+                  <thead style="position:sticky; top:0; z-index:20; background:#0f172a; border-bottom:1px solid #334155">
                     <tr>
-                      <th>类型</th>
-                      <th>子类目</th>
-                      <th>往来单位</th>
-                      <th>金额</th>
-                      <th>支付方式</th>
-                      <th>文件</th>
-                      <th>录入方式</th>
-                      <th>备注</th>
-                      <th>日期</th>
+                      <th id="ld-type" style="position:relative; cursor:pointer; background:#0f172a">
+                        <span id="ld-type-label">类型 ▾</span>
+                        <div id="ld-type-dd" class="dropdown" style="display:none; position:absolute; top:100%; left:0; min-width:140px; z-index:30">
+                          <div id="ld-type-list" class="dd-list"></div>
+                        </div>
+                      </th>
+                      <th id="ld-cat" style="position:relative; cursor:pointer; background:#0f172a">
+                        <span id="ld-cat-label">子类目 ▾</span>
+                        <div id="ld-cat-dd" class="dropdown" style="display:none; position:absolute; top:100%; left:0; min-width:160px; z-index:30">
+                          <div id="ld-cat-list" class="dd-list"></div>
+                        </div>
+                      </th>
+                      <th style="background:#0f172a">单据/凭证号</th>
+                      <th id="ld-owner" style="position:relative; cursor:pointer; background:#0f172a">
+                        <span id="ld-owner-label">往来单位 ▾</span>
+                        <div id="ld-owner-dd" class="dropdown" style="display:none; position:absolute; top:100%; left:0; min-width:160px; z-index:30">
+                          <div id="ld-owner-list" class="dd-list"></div>
+                        </div>
+                      </th>
+                      <th style="background:#0f172a">金额</th>
+                      <th style="background:#0f172a">支付方式</th>
+                      <th style="background:#0f172a">文件</th>
+                      <th style="background:#0f172a">录入方式</th>
+                      <th style="background:#0f172a">备注</th>
+                      <th style="background:#0f172a">日期</th>
                     </tr>
                   </thead>
-                  <tbody id="rows">
-                    <tr class="empty"><td colspan="9">暂无流水记录</td></tr>
+                  <tbody id="rows" style="position:relative; z-index:1">
+                    <tr class="empty"><td colspan="10">暂无流水记录</td></tr>
                   </tbody>
                 </table>
               </div>
+              <div id="ledger-pager" style="display:none; gap:8px; align-items:center; justify-content:center; padding:12px 0"></div>
             </div>
             <div class="card">
               <form class="form" id="entry-form">
@@ -218,6 +257,10 @@
                   <select id="entry-category">
                     <option value="">请选择子类目</option>
                   </select>
+                </div>
+                <div class="group">
+                  <span class="label">单据 / 凭证号</span>
+                  <input id="entry-doc" type="text" placeholder="输入单据/凭证号">
                 </div>
                 <div class="group">
                   <span class="label">往来单位</span>
@@ -264,6 +307,34 @@
             </div>
           </div>
         </div>
+      <div id="amount-history-modal" class="modal-overlay" style="display:none">
+        <div class="modal">
+          <div class="modal-header">
+            <div class="modal-title">金额记录</div>
+          </div>
+          <div class="modal-body">
+            <div id="amount-history-head" style="margin-bottom:12px"></div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>序列号</th>
+                    <th>操作日期</th>
+                    <th>订单号</th>
+                    <th>金额变化</th>
+                    <th>欠款金额</th>
+                    <th>记录人员</th>
+                  </tr>
+                </thead>
+                <tbody id="amount-history-rows"></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="modal-actions">
+            <button id="amount-history-close" class="btn">关闭</button>
+          </div>
+        </div>
+      </div>
         <div id="client-modal" class="modal-overlay" style="display:none">
           <div class="modal">
             <div class="modal-header">
@@ -331,7 +402,7 @@
           </div>
         </div>
         <div id="page-payables" style="display:none">
-          <div class="row">
+          <div class="row" id="payables-row" style="display:grid; grid-template-columns:1fr 280px; gap:24px">
             <div class="card">
               <div class="summary">
                 <div class="summary-item">应收总额 <span id="sum-recv">0.00</span></div>
@@ -340,22 +411,52 @@
                   <span class="label">关键词</span>
                   <input id="pay-filter-key" type="text" placeholder="搜索关键词">
                 </div>
+                <button id="pay-export" class="btn" style="margin-left:8px; display:flex; align-items:center; gap:6px">
+                  <span style="display:inline-block; width:14px; height:14px; background:#22c55e; border-radius:3px"></span>
+                  导出Excel
+                </button>
+                <button id="pay-clear" class="btn-secondary" style="margin-left:8px">清空记录</button>
               </div>
-              <div class="table-wrap">
-                <table>
-                  <thead>
+              <div class="table-wrap" id="pay-table-wrap" style="height:calc(100vh - 220px); overflow:auto; position:relative; background:#0f172a; padding:0 16px 16px 16px">
+                <table style="border-collapse:collapse; border-spacing:0; width:100%">
+                  <thead style="position:sticky; top:0; z-index:20; background:#0f172a; border-bottom:1px solid var(--line)">
                     <tr>
-                      <th>款项类型</th>
+                      <th id="th-type" style="position:relative; cursor:pointer">
+                        <span id="th-type-label">款项类型 ▾</span>
+                        <div id="th-type-dd" class="dropdown" style="display:none; position:absolute; top:100%; left:0; min-width:140px; z-index:30">
+                          <div id="th-type-list" class="dd-list"></div>
+                        </div>
+                      </th>
                       <th>往来单位</th>
                       <th>单据/凭证号</th>
                       <th>金额</th>
-                      <th>信任天数</th>
+                      <th>发票号</th>
+                      <th>发票金额</th>
+                      <th id="th-arrears" style="position:relative; cursor:pointer">
+                        <span id="th-arrears-label">欠款 ▾</span>
+                        <div id="th-arrears-dd" class="dropdown" style="display:none; position:absolute; top:100%; left:0; min-width:160px; z-index:30">
+                          <div id="th-arrears-list" class="dd-list"></div>
+                        </div>
+                      </th>
+                      <th id="th-trust" style="position:relative; cursor:pointer">
+                        <span id="th-trust-label">信任天数 ▾</span>
+                        <div id="th-trust-dd" class="dropdown" style="display:none; position:absolute; top:100%; left:0; min-width:140px; z-index:30">
+                          <div id="th-trust-list" class="dd-list"></div>
+                        </div>
+                      </th>
                       <th>备注</th>
+                      <th id="th-sales" style="position:relative; cursor:pointer">
+                        <span id="th-sales-label">业务员 ▾</span>
+                        <div id="th-sales-dd" class="dropdown" style="display:none; position:absolute; top:100%; left:0; min-width:160px; z-index:30">
+                          <div id="th-sales-list" class="dd-list"></div>
+                        </div>
+                      </th>
                       <th>日期</th>
+                      <th>操作</th>
                     </tr>
                   </thead>
                   <tbody id="pay-rows">
-                    <tr class="empty"><td colspan="7">暂无记录</td></tr>
+                    <tr class="empty"><td colspan="12">暂无记录</td></tr>
                   </tbody>
                 </table>
               </div>
@@ -391,6 +492,12 @@
                   <input id="pay-doc" type="text" placeholder="单据 / 凭证号">
                 </div>
                 <div class="group">
+                  <span class="label">业务员</span>
+                  <select id="pay-sales">
+                    <option value="">请选择业务员</option>
+                  </select>
+                </div>
+                <div class="group">
                   <span class="label">金额</span>
                   <input id="pay-amount" type="number" step="0.01" placeholder="金额">
                 </div>
@@ -406,6 +513,11 @@
                   </select>
                 </div>
                 <div class="group">
+                  <span class="label">批量导入</span>
+                  <input id="pay-import-file" type="file" accept=".xls,.xlsx,.csv">
+                  <div id="pay-import-hint" style="margin-top:6px; font-size:12px; color:#9ca3af">选择文件后自动解析，点击下方提交完成入库</div>
+                </div>
+                <div class="group">
                   <span class="label">备注</span>
                   <textarea id="pay-notes" placeholder="备注"></textarea>
                 </div>
@@ -415,16 +527,67 @@
               </form>
             </div>
           </div>
+          <div id="pay-import-modal" class="modal-overlay" style="display:none">
+            <div class="modal" style="width:90vw; max-width:1400px">
+              <div class="modal-header">
+                <div class="modal-title">批量导入预览</div>
+              </div>
+              <div class="modal-body">
+                <div class="panel-light">
+                  <div class="light-top" id="pay-import-summary">已解析 0 条</div>
+                  <div class="table-scroll">
+                  <table class="preview-table">
+                    <thead>
+                      <tr>
+                        <th>应收应付</th><th>往来单位</th><th>单据凭证号</th><th>出单日期</th><th>订单金额</th><th>发票号</th><th>发票日期</th><th>发票金额</th><th>信任天数</th><th>备注</th><th>业务员</th>
+                      </tr>
+                    </thead>
+                    <tbody id="pay-import-rows"></tbody>
+                  </table>
+                  </div>
+                </div>
+              </div>
+              <div class="modal-actions">
+                <button type="button" id="pay-import-cancel" class="btn-secondary">取消</button>
+                <button type="button" id="pay-import-commit" class="btn">批量入库</button>
+              </div>
+            </div>
+          </div>
+          <div id="pay-history-modal" class="modal-overlay" style="display:none">
+            <div class="modal">
+              <div class="modal-header">
+                <div class="modal-title">历史记录详情</div>
+              </div>
+              <div class="modal-body">
+              <div id="pay-history-head" style="margin-bottom:12px"></div>
+              <div id="pay-history-notes" style="background:#0f172a; border:1px solid #334155; border-radius:8px; padding:12px; margin-bottom:12px">
+                <div style="color:#cbd5e1; margin-bottom:8px">备注</div>
+                <div id="pay-history-notes-text" style="white-space:pre-wrap; color:#e2e8f0"></div>
+                <div style="display:flex; gap:8px; align-items:flex-start; margin-top:10px">
+                  <textarea id="pay-history-notes-input" placeholder="添加备注..." style="flex:1; min-height:80px; background:#0b1524; border:1px solid #233048; color:#fff; border-radius:8px; padding:10px 12px; outline:none"></textarea>
+                  <button id="pay-history-notes-add" class="btn" type="button">添加备注</button>
+                </div>
+              </div>
+                <div id="pay-history-list"></div>
+              </div>
+              <div class="modal-actions">
+                <button id="pay-history-close" class="btn">关闭</button>
+              </div>
+            </div>
+          </div>
         </div>
         <div id="page-contacts" style="display:none">
           <div class="card">
-            <div class="bar">
+            <div class="bar" style="display:flex; align-items:center; justify-content:space-between">
               <div class="tabs">
                 <button class="tab active" data-tab="customers">客户列表</button>
                 <button class="tab" data-tab="merchants">商家列表</button>
                 <button class="tab" data-tab="others">其它往来单位</button>
               </div>
-              <input id="contacts-search" type="text" placeholder="搜索..." style="width:280px">
+              <div style="display:flex; align-items:center; gap:12px">
+                <input id="contacts-search" type="text" placeholder="搜索..." style="width:280px">
+                <button class="btn" id="contacts-submit-top" type="button">新增</button>
+              </div>
             </div>
             <div style="padding:16px">
               <h3 style="margin:0 0 12px">新增</h3>
@@ -440,8 +603,11 @@
                   <input id="ct-zip" type="text" placeholder="邮编">
                   <input id="ct-city" type="text" placeholder="城市">
                   <input id="ct-remark" class="span2" type="text" placeholder="备注">
+                  <select id="ct-sales" class="span2">
+                    <option value="">请选择业务员</option>
+                  </select>
                 </div>
-                <div class="submit" style="margin-top:12px">
+                <div class="submit" style="margin-top:12px; display:none">
                   <button class="btn" id="contacts-submit" type="submit">新增</button>
                 </div>
               </form>
@@ -456,7 +622,9 @@
                       <th>电话</th>
                       <th>城市</th>
                       <th>备注</th>
+                    <th>业务员</th>
                       <th>交易金额</th>
+                      <th>欠款金额</th>
                       <th>创建时间</th>
                       <th>操作</th>
                     </tr>
@@ -465,6 +633,7 @@
                   </tbody>
                 </table>
               </div>
+              <div id="contacts-pager" style="display:none; gap:8px; align-items:center; justify-content:center; padding:12px 0"></div>
             </div>
           </div>
         </div>
@@ -590,6 +759,106 @@
             </div>
           </div>
         </div>
+        <div id="page-sales-accounts" style="display:none">
+          <div class="card">
+            <div class="bar">
+              <h3 style="margin:0">业务员管理</h3>
+              <div style="display:flex; align-items:center; gap:12px">
+                <button id="sales-create" class="btn">创建业务员</button>
+                <div class="field" style="min-width:260px">
+                  <span class="label">检索</span>
+                  <input id="sales-search" type="text" placeholder="搜索姓名/地区/电话">
+                </div>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>序号</th>
+                    <th>姓名</th>
+                    <th>地区</th>
+                    <th>电话</th>
+                    <th>底薪</th>
+                    <th>提成比例</th>
+                    <th>佣金</th>
+                    <th>订单数</th>
+                    <th>总销售额</th>
+                    <th>欠款金额</th>
+                    <th>创建时间</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody id="sales-rows"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        <div id="sales-orders-modal" class="modal-overlay" style="display:none">
+          <div class="modal" style="max-width:960px">
+            <div class="modal-header">
+              <div class="modal-title">订单列表</div>
+              <button id="sales-orders-close" class="btn-secondary">关闭</button>
+            </div>
+            <div class="modal-body">
+              <div class="panel-light">
+                <div id="sales-orders-head" class="light-top">业务员：</div>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>类型</th><th>往来单位</th><th>单据/凭证号</th><th>金额</th><th>已付</th><th>欠款</th><th>日期</th>
+                    </tr>
+                  </thead>
+                  <tbody id="sales-orders-rows"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="sales-arrears-modal" class="modal-overlay" style="display:none">
+          <div class="modal" style="max-width:960px">
+            <div class="modal-header">
+              <div class="modal-title">未付款订单</div>
+              <button id="sales-arrears-close" class="btn-secondary">关闭</button>
+            </div>
+            <div class="modal-body">
+              <div class="panel-light">
+                <div id="sales-arrears-head" class="light-top">业务员：</div>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>类型</th><th>往来单位</th><th>单据/凭证号</th><th>金额</th><th>已付</th><th>剩余支付</th><th>日期</th>
+                    </tr>
+                  </thead>
+                  <tbody id="sales-arrears-rows"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="sales-modal" class="modal-overlay" style="display:none">
+          <div class="modal">
+            <div class="modal-header">
+              <div class="modal-title">业务员信息</div>
+            </div>
+            <form id="sales-form">
+              <div class="modal-body">
+                <div class="grid6">
+                  <input id="s-name" type="text" placeholder="姓名">
+                  <input id="s-region" type="text" placeholder="地区">
+                  <input id="s-phone" type="text" placeholder="电话">
+                  <input id="s-base" type="number" step="0.01" placeholder="底薪">
+                  <input id="s-rate" type="number" step="0.0001" placeholder="提成比例(如0.05)">
+                  <input id="s-commission" type="number" step="0.01" placeholder="佣金">
+                </div>
+              </div>
+              <div class="modal-actions">
+                <button type="button" id="sales-cancel" class="btn-secondary">取消</button>
+                <button type="submit" class="btn">保存</button>
+              </div>
+            </form>
+          </div>
+        </div>
         <div id="user-modal" class="modal-overlay" style="display:none">
           <div class="modal">
             <div class="modal-header">
@@ -661,6 +930,10 @@
             <div class="tag">页面建设中</div>
           </div>
         </div>
+        <div id="global-pager" style="display:flex">
+          <div id="global-pager-controls"></div>
+          <div id="pay-footer-info"></div>
+        </div>
       </main>
     </div>
     <script>
@@ -696,6 +969,94 @@
       const filterKey = document.getElementById('filter-key');
       const filterStart = document.getElementById('filter-start');
       const filterEnd = document.getElementById('filter-end');
+      const ledgerPager = document.getElementById('global-pager-controls') || document.getElementById('ledger-pager');
+      const ledgerTableWrap = document.getElementById('ledger-table-wrap');
+      const ldType = document.getElementById('ld-type');
+      const ldTypeDD = document.getElementById('ld-type-dd');
+      const ldTypeList = document.getElementById('ld-type-list');
+      const ldTypeLabel = document.getElementById('ld-type-label');
+      const ldCat = document.getElementById('ld-cat');
+      const ldCatDD = document.getElementById('ld-cat-dd');
+      const ldCatList = document.getElementById('ld-cat-list');
+      const ldCatLabel = document.getElementById('ld-cat-label');
+      const ldOwner = document.getElementById('ld-owner');
+      const ldOwnerDD = document.getElementById('ld-owner-dd');
+      const ldOwnerList = document.getElementById('ld-owner-list');
+      const ldOwnerLabel = document.getElementById('ld-owner-label');
+      let ledgerPage = 1;
+      const ledgerPageSize = 100;
+      function updateLedgerHeaderCover() {}
+      let ledgerHdrType = 'all'; // '收入' | '开支' | 'all'
+      let ledgerHdrCat = '';     // child category name or ''
+      let ledgerHdrOwner = '';   // '客户' | '商家' | '其它'
+      function clientOwner(name) {
+        const all = [...contactsData.customers, ...contactsData.merchants, ...contactsData.others];
+        const obj = all.find(x => (x.name||'') === (name||''));
+        return obj ? (obj.owner || '') : '';
+      }
+      function openLedgerTypeFilter() {
+        ldTypeDD.style.display = 'block';
+        ldTypeList.innerHTML = '';
+        const addItem = (label, val) => {
+          const row = document.createElement('div'); row.className='dd-item'; row.textContent = label;
+          row.addEventListener('click', () => {
+            ledgerHdrType = val;
+            ldTypeDD.style.display='none';
+            setLabel(ldTypeLabel, '类型', val!=='all');
+            ledgerPage = 1;
+            applyFilters();
+            // 更新子类目下拉的可选项
+            ldCatLabel && setLabel(ldCatLabel, '子类目', !!ledgerHdrCat);
+          });
+          ldTypeList.appendChild(row);
+        };
+        addItem('全部', 'all');
+        addItem('收入', '收入');
+        addItem('开支', '开支');
+      }
+      function openLedgerCatFilter() {
+        ldCatDD.style.display = 'block';
+        ldCatList.innerHTML = '';
+        const addItem = (label, val) => {
+          const row = document.createElement('div'); row.className='dd-item'; row.textContent = label;
+          row.addEventListener('click', () => {
+            ledgerHdrCat = val;
+            ldCatDD.style.display='none';
+            setLabel(ldCatLabel, '子类目', !!val);
+            ledgerPage = 1;
+            applyFilters();
+          });
+          ldCatList.appendChild(row);
+        };
+        addItem('全部', '');
+        const types = ledgerHdrType==='all' ? categoriesData.map(c=>c.name) : [ledgerHdrType];
+        types.forEach(t => {
+          const children = (categoriesData.find(c=>c.name===t)?.children) || [];
+          children.forEach(n => addItem(n, n));
+        });
+      }
+      function openLedgerOwnerFilter() {
+        ldOwnerDD.style.display = 'block';
+        ldOwnerList.innerHTML = '';
+        const addItem = (label, val) => {
+          const row = document.createElement('div'); row.className='dd-item'; row.textContent = label;
+          row.addEventListener('click', () => {
+            ledgerHdrOwner = val;
+            ldOwnerDD.style.display='none';
+            setLabel(ldOwnerLabel, '往来单位', !!val);
+            ledgerPage = 1;
+            applyFilters();
+          });
+          ldOwnerList.appendChild(row);
+        };
+        addItem('全部', '');
+        addItem('客户', '客户');
+        addItem('商家', '商家');
+        addItem('其它往来单位', '其它');
+      }
+      ldType?.addEventListener('click', (e) => { e.stopPropagation(); openLedgerTypeFilter(); });
+      ldCat?.addEventListener('click', (e) => { e.stopPropagation(); openLedgerCatFilter(); });
+      ldOwner?.addEventListener('click', (e) => { e.stopPropagation(); openLedgerOwnerFilter(); });
       const accRows = document.getElementById('acc-rows');
       const accAdd = document.getElementById('acc-add');
       const accountsData = [
@@ -713,9 +1074,28 @@
       }
       function initPersist() {
         const recs = loadJSON('records', []);
-        if (Array.isArray(recs)) { records.splice(0, records.length, ...recs); }
+        if (Array.isArray(recs)) {
+          // 清理已失效的 blob: 临时链接，避免刷新后报错
+          recs.forEach(r => { if (r && typeof r.fileUrl === 'string' && /^blob:/i.test(r.fileUrl)) delete r.fileUrl; });
+          recs.forEach(r => {
+            if (r && !r.createdAt) {
+              const ts = Date.parse(r.dateTime || r.date || '');
+              if (!isNaN(ts)) r.createdAt = ts;
+            }
+          });
+          records.splice(0, records.length, ...recs);
+        }
         const pays = loadJSON('payRecords', []);
-        if (Array.isArray(pays)) { payRecords.splice(0, payRecords.length, ...pays); }
+        if (Array.isArray(pays)) {
+          pays.forEach(r => {
+            if (r && !r.createdAt) {
+              const h0 = (r.history && r.history[0] && (r.history[0].date || r.history[0].dateTime)) || null;
+              const ts = Date.parse(h0 || r.date || '');
+              if (!isNaN(ts)) r.createdAt = ts;
+            }
+          });
+          payRecords.splice(0, payRecords.length, ...pays);
+        }
         const contactsSaved = loadJSON('contactsData', null);
         if (contactsSaved && typeof contactsSaved === 'object') {
           ['customers','merchants','others'].forEach(k => { if (Array.isArray(contactsSaved[k])) contactsData[k] = contactsSaved[k]; });
@@ -728,6 +1108,8 @@
         if (Array.isArray(roles)) { rolesData.splice(0, rolesData.length, ...roles); }
         const users = loadJSON('userAccounts', null);
         if (Array.isArray(users)) { userAccounts.splice(0, userAccounts.length, ...users); }
+        const sales = loadJSON('salesData', null);
+        if (Array.isArray(sales)) { salesData.splice(0, salesData.length, ...sales); }
       }
       function refreshAccountOptions() {
         entryMethod.innerHTML = '<option value=\"\">请选择</option>';
@@ -923,13 +1305,30 @@
         if (list.includes(prev)) entryCategory.value = prev;
       }
       entryType.addEventListener('change', setCategories);
+      const entryDoc = document.getElementById('entry-doc');
+      entryCategory.addEventListener('change', () => { entryDoc?.focus(); });
+      function linkDocToPayable() {
+        const doc = (entryDoc?.value || '').trim();
+        const type = entryType.value;
+        if (!doc) return;
+        const targetType = type === '收入' ? '应收账款' : (type === '支出' ? '应付账款' : null);
+        if (!targetType) return;
+        const rec = payRecords.find(r => (r.doc||'') === doc && r.type === targetType);
+        if (rec) {
+          entryClient.value = rec.partner || '';
+          const remaining = Math.max(0, (rec.amount||0) - (rec.paid||0));
+          entryAmount.value = String(remaining || rec.amount || 0);
+        }
+      }
+      entryDoc?.addEventListener('blur', linkDocToPayable);
+      entryDoc?.addEventListener('keyup', (e) => { if (e.key === 'Enter') linkDocToPayable(); });
       function render(data) {
         rows.innerHTML = '';
         if (!data.length) {
           const tr = document.createElement('tr');
           tr.className = 'empty';
           const td = document.createElement('td');
-          td.colSpan = 9;
+          td.colSpan = 10;
           td.textContent = '暂无流水记录';
           tr.appendChild(td);
           rows.appendChild(tr);
@@ -941,6 +1340,7 @@
           const cols = [];
           cols.push(r.type);
           cols.push(r.category);
+          cols.push(r.doc || '');
           cols.push(r.client || '');
           cols.push(amt);
           cols.push(r.method || '');
@@ -950,7 +1350,7 @@
           cols.push(r.date);
           cols.forEach((v, i) => {
             const td = document.createElement('td');
-            if (i === 5) {
+            if (i === 6) {
               if (r.fileUrl) {
                 if ((r.fileType || '').includes('pdf') || /\.pdf$/i.test(r.fileName||'')) {
                   const span = document.createElement('span');
@@ -980,7 +1380,7 @@
                   td.appendChild(img);
                 }
               } else {
-                td.textContent = r.file || '';
+                td.textContent = r.file ? r.file : '-';
               }
             } else {
               td.textContent = v;
@@ -1001,24 +1401,96 @@
       }
       function applyFilters() {
         const { t, key, s, e } = getFilters();
-        const out = records.filter(r => {
+        const outAll = records.filter(r => {
           if (t !== 'all' && r.type !== t) return false;
+          if (ledgerHdrType !== 'all') {
+            if (ledgerHdrType === '开支') { if (!(r.type === '开支' || r.type === '支出')) return false; }
+            else if (r.type !== ledgerHdrType) return false;
+          }
+          if (ledgerHdrCat && r.category !== ledgerHdrCat) return false;
+          if (ledgerHdrOwner) {
+            const owner = clientOwner(r.client || '');
+            if (owner !== ledgerHdrOwner) return false;
+          }
           if (key && !((r.client||'').includes(key) || (r.notes||'').includes(key))) return false;
           const d = new Date(r.date);
           if (s && d < s) return false;
           if (e && d > e) return false;
           return true;
         });
+        function ts(r) {
+          const t1 = r.createdAt || 0;
+          const t2 = r.dateTime ? Date.parse(r.dateTime) : 0;
+          const t3 = r.date ? Date.parse(r.date) : 0;
+          return t1 || t2 || t3 || 0;
+        }
+        outAll.sort((a,b) => ts(b) - ts(a));
+        const total = outAll.length;
+        const totalPages = Math.max(1, Math.ceil(total / ledgerPageSize));
+        if (ledgerPage > totalPages) ledgerPage = totalPages;
+        const startIdx = (ledgerPage - 1) * ledgerPageSize;
+        const out = outAll.slice(startIdx, startIdx + ledgerPageSize);
         render(out);
+        if (ledgerTableWrap) ledgerTableWrap.scrollTop = 0;
+        updateLedgerHeaderCover();
+        if (ledgerPager) {
+          ledgerPager.innerHTML = '';
+          const makeBtn = (label, page, disabled=false, active=false) => {
+            const b = document.createElement('a');
+            b.href = '#'; b.textContent = label;
+            b.style.padding = '4px 8px';
+            b.style.border = '1px solid #334155';
+            b.style.borderRadius = '4px';
+            b.style.color = active ? '#000' : '#cbd5e1';
+            b.style.background = active ? '#cbd5e1' : 'transparent';
+            b.style.pointerEvents = disabled ? 'none' : 'auto';
+            b.style.opacity = disabled ? '0.4' : '1';
+            b.addEventListener('click', e => { e.preventDefault(); ledgerPage = page; applyFilters(); });
+            ledgerPager.appendChild(b);
+          };
+          makeBtn('«', Math.max(1, ledgerPage-1), ledgerPage<=1);
+          const maxButtons = 9;
+          let start = Math.max(1, ledgerPage - Math.floor(maxButtons/2));
+          let end = Math.min(totalPages, start + maxButtons - 1);
+          start = Math.max(1, end - maxButtons + 1);
+          for (let p = start; p <= end; p++) makeBtn(String(p), p, false, p===ledgerPage);
+          makeBtn('»', Math.min(totalPages, ledgerPage+1), ledgerPage>=totalPages);
+        }
+        const infoEl = document.getElementById('pay-footer-info');
+        if (infoEl) {
+          const totalCount = (records || []).length;
+          const todayStr = (() => { const d = new Date(); const y=d.getFullYear(); const m=String(d.getMonth()+1).padStart(2,'0'); const dd=String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${dd}`; })();
+          const toTs = r => r.createdAt || (r.dateTime ? Date.parse(r.dateTime) : 0) || (r.date ? Date.parse(r.date) : 0) || 0;
+          const todayCount = (records || []).filter(r => {
+            const t = toTs(r); if (!t) return false;
+            const d = new Date(t); const y=d.getFullYear(); const m=String(d.getMonth()+1).padStart(2,'0'); const dd=String(d.getDate()).padStart(2,'0');
+            return `${y}-${m}-${dd}` === todayStr;
+          }).length;
+          const latestTs = Math.max(0, ...((records||[]).map(toTs)));
+          const latestCount = latestTs ? (records || []).filter(r => toTs(r) === latestTs).length : 0;
+          const mk = (text) => { const s = document.createElement('span'); s.className = 'info-pill'; s.textContent = text; return s; };
+          infoEl.innerHTML = '';
+          infoEl.appendChild(mk(`共 ${totalCount} 条记录`));
+          infoEl.appendChild(mk(`今日上传 ${todayCount} 条`));
+          infoEl.appendChild(mk(`最后次上传 ${latestCount || 1} 条`));
+        }
       }
       filterKey.addEventListener('input', applyFilters);
-      filterType.addEventListener('change', applyFilters);
-      filterStart.addEventListener('change', applyFilters);
-      filterEnd.addEventListener('change', applyFilters);
+      filterType.addEventListener('change', () => { ledgerPage = 1; applyFilters(); });
+      filterStart.addEventListener('change', () => { ledgerPage = 1; applyFilters(); });
+      filterEnd.addEventListener('change', () => { ledgerPage = 1; applyFilters(); });
+      document.getElementById('ledger-clear')?.addEventListener('click', () => {
+        if (!confirm('确认清空收支记账的所有数据？此操作不可撤销。')) return;
+        records.splice(0, records.length);
+        saveJSON('records', records);
+        applyFilters();
+        rows.innerHTML = '<tr class="empty"><td colspan="10">暂无流水记录</td></tr>';
+      });
       document.getElementById('entry-form').addEventListener('submit', e => {
         e.preventDefault();
         const type = entryType.value;
         const category = entryCategory.value;
+        const doc = (document.getElementById('entry-doc')?.value || '').trim();
         const amount = parseFloat(entryAmount.value);
         const method = entryMethod.value;
         if (!type || !category || !amount || !method) return;
@@ -1026,7 +1498,8 @@
         const file = fileObj ? fileObj.name : '';
         const now = new Date();
         const date = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
-        const rec = { type, category, client: entryClient.value.trim(), amount, method, file, entry:'手动', notes: entryNotes.value.trim(), date };
+        const dateTime = `${date} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+        const rec = { type, category, doc, client: entryClient.value.trim(), amount, method, file, entry:'手动', notes: entryNotes.value.trim(), date, dateTime, createdAt: Date.now() };
         if (fileObj) {
           const extOk = /(\.jpe?g|\.pdf)$/i.test(fileObj.name);
           if (!extOk) { alert('仅支持 JPG 或 PDF 文件'); return; }
@@ -1035,19 +1508,43 @@
           rec.fileUrl = URL.createObjectURL(fileObj);
         }
         records.push(rec);
+        // 关联应收/应付账款的付款累积
+        if (doc) {
+          const targetType = type === '收入' ? '应收账款' : (type === '支出' ? '应付账款' : null);
+          const pr = targetType ? payRecords.find(r => (r.doc||'') === doc && r.type === targetType) : null;
+          if (pr) {
+            pr.paid = (pr.paid || 0) + amount;
+            if (pr.paid > (pr.amount || 0)) pr.paid = pr.amount || 0;
+            pr.history = pr.history || [];
+            const actor = (getAuthUser()?.name) || '';
+            pr.history.push({ date: dateTime, user: actor, kind: type === '收入' ? '部分支付' : '部分支出', amount, method, notes: rec.notes || '' });
+            if (pr.paid >= (pr.amount || 0)) {
+              pr.settled = true;
+              pr.history.push({ date: dateTime, user: actor, kind: '结清', amount: pr.paid });
+            }
+            renderPayables();
+            saveJSON('payRecords', payRecords);
+          }
+        }
         const acc = accountsData.find(a => a.name === method);
         if (acc) {
           if (type === '收入') acc.balance += amount;
           if (type === '开支' || type === '支出') acc.balance -= amount;
           renderAccounts();
         }
+        document.getElementById('entry-doc').value = '';
         entryClient.value = '';
         entryAmount.value = '';
         entryMethod.value = '';
         entryFile.value = '';
         entryNotes.value = '';
+        ledgerPage = 1;
         applyFilters();
-        saveJSON('records', records);
+        // 持久化时不保存 fileUrl（blob: 为会话临时链接，刷新后失效）
+        saveJSON('records', records.map(r => {
+          const { fileUrl, ...rest } = r;
+          return rest;
+        }));
         saveJSON('accountsData', accountsData);
       });
       const payRows = document.getElementById('pay-rows');
@@ -1055,13 +1552,107 @@
       const payPartner = document.getElementById('pay-partner');
       const partnerAdd = document.getElementById('partner-add');
       const payDoc = document.getElementById('pay-doc');
+      const paySales = document.getElementById('pay-sales');
       const payAmount = document.getElementById('pay-amount');
       const payTrust = document.getElementById('pay-trust');
       const payNotes = document.getElementById('pay-notes');
       const payForm = document.getElementById('pay-form');
+       const payImportFile = document.getElementById('pay-import-file');
+       payImportFile?.addEventListener('click', () => { try { payImportFile.value = ''; } catch {} });
+       const payImportHint = document.getElementById('pay-import-hint');
+       const payImportModal = document.getElementById('pay-import-modal');
+       const payImportRows = document.getElementById('pay-import-rows');
+       const payImportSummary = document.getElementById('pay-import-summary');
+       const payImportCancel = document.getElementById('pay-import-cancel');
+       const payImportCommit = document.getElementById('pay-import-commit');
       const sumRecvEl = document.getElementById('sum-recv');
       const sumPayEl = document.getElementById('sum-pay');
       const payFilterKey = document.getElementById('pay-filter-key');
+      const payExportBtn = document.getElementById('pay-export');
+      const payClearBtn = document.getElementById('pay-clear');
+      let payLastPageData = [];
+      const payPager = document.getElementById('global-pager-controls') || document.getElementById('pay-pager');
+      const payFooterInfo = document.getElementById('pay-footer-info');
+      const payTableWrap = document.getElementById('pay-table-wrap');
+      const thType = document.getElementById('th-type');
+      const thTypeDD = document.getElementById('th-type-dd');
+      const thTypeList = document.getElementById('th-type-list');
+      const thTypeLabel = document.getElementById('th-type-label');
+      const thSales = document.getElementById('th-sales');
+      const thSalesDD = document.getElementById('th-sales-dd');
+      const thSalesList = document.getElementById('th-sales-list');
+      const thSalesLabel = document.getElementById('th-sales-label');
+      const thArrears = document.getElementById('th-arrears');
+      const thArrearsDD = document.getElementById('th-arrears-dd');
+      const thArrearsList = document.getElementById('th-arrears-list');
+      const thArrearsLabel = document.getElementById('th-arrears-label');
+      const thTrust = document.getElementById('th-trust');
+      const thTrustDD = document.getElementById('th-trust-dd');
+      const thTrustList = document.getElementById('th-trust-list');
+      const thTrustLabel = document.getElementById('th-trust-label');
+      let payFilterSalesName = '';
+      let payFilterStatus = 'all';
+      let payFilterType = 'all'; // recv | pay | all
+      let payFilterOverdue = 'all'; // overdue | not | all
+      let payPage = 1;
+      const payPageSize = 100;
+      function setLabel(el, text, active) {
+        if (!el) return;
+        el.textContent = text + ' ▾';
+        el.style.color = active ? '#ef4444' : '';
+      }
+      function openTypeFilter() {
+        thTypeDD.style.display = 'block';
+        thTypeList.innerHTML = '';
+        const addItem = (label, val) => {
+          const row = document.createElement('div'); row.className='dd-item'; row.textContent = label;
+          row.addEventListener('click', () => { payFilterType = val; thTypeDD.style.display='none'; setLabel(thTypeLabel, val==='all'?'款项类型':'应'+(val==='recv'?'收':'付'), val!=='all'); payPage = 1; renderPayables(); });
+          thTypeList.appendChild(row);
+        };
+        addItem('全部', 'all');
+        addItem('应收', 'recv');
+        addItem('应付', 'pay');
+      }
+      function openSalesFilter() {
+        thSalesDD.style.display = 'block';
+        thSalesList.innerHTML = '';
+        const addItem = (label, val) => {
+          const row = document.createElement('div'); row.className='dd-item'; row.textContent = label;
+          row.addEventListener('click', () => { payFilterSalesName = val; thSalesDD.style.display='none'; setLabel(thSalesLabel, val ? (val==='__none__'?'无业务员':val) : '业务员', !!val); payPage = 1; renderPayables(); });
+          thSalesList.appendChild(row);
+        };
+        addItem('全部', '');
+        addItem('无业务员', '__none__');
+        (salesData || []).forEach(s => addItem(s.name, s.name));
+      }
+      function openArrearsFilter() {
+        thArrearsDD.style.display = 'block';
+        thArrearsList.innerHTML = '';
+        const addItem = (label, val) => {
+          const row = document.createElement('div'); row.className='dd-item'; row.textContent = label;
+          row.addEventListener('click', () => { payFilterStatus = val; thArrearsDD.style.display='none'; setLabel(thArrearsLabel, val==='all'?'欠款':(val==='arrears'?'欠款订单':'订单完成'), val!=='all'); payPage = 1; renderPayables(); });
+          thArrearsList.appendChild(row);
+        };
+        addItem('全部订单', 'all');
+        addItem('欠款订单', 'arrears');
+        addItem('订单完成', 'done');
+      }
+      function openTrustFilter() {
+        thTrustDD.style.display = 'block';
+        thTrustList.innerHTML = '';
+        const addItem = (label, val) => {
+          const row = document.createElement('div'); row.className='dd-item'; row.textContent = label;
+          row.addEventListener('click', () => { payFilterOverdue = val; thTrustDD.style.display='none'; setLabel(thTrustLabel, val==='all'?'信任天数':(val==='overdue'?'已逾期':'未逾期'), val!=='all'); payPage = 1; renderPayables(); });
+          thTrustList.appendChild(row);
+        };
+        addItem('全部', 'all');
+        addItem('已逾期', 'overdue');
+        addItem('未逾期', 'not');
+      }
+      thType?.addEventListener('click', (e) => { e.stopPropagation(); openTypeFilter(); });
+      thSales?.addEventListener('click', (e) => { e.stopPropagation(); openSalesFilter(); });
+      thArrears?.addEventListener('click', (e) => { e.stopPropagation(); openArrearsFilter(); });
+      thTrust?.addEventListener('click', (e) => { e.stopPropagation(); openTrustFilter(); });
       const typeSwitch = document.getElementById('type-switch');
       const typeItems = typeSwitch ? typeSwitch.querySelectorAll('.type-item') : [];
       function setPayType(val) {
@@ -1087,7 +1678,7 @@
         if (!partners.includes(name)) partners.push(name);
       });
       function renderPayDropdown() {
-        const q = (paySearch.value || '').trim();
+        const q = (paySearch?.value || payPartner.value || '').trim();
         const data = allContacts().filter(x => {
           if (!q) return true;
           return [x.name,x.contact,x.phone,x.city,(x.remark||'')].some(v => (v||'').includes(q));
@@ -1104,24 +1695,132 @@
           row.append(left, right);
           row.addEventListener('click', () => {
             payPartner.value = item.name;
+            if (paySales) {
+              // 自动带出该客户绑定的长期业务员；无则留空
+              const bound = (item.sales || '').trim();
+              paySales.value = bound && [...paySales.options].some(o => o.value === bound) ? bound : '';
+            }
             payDD.style.display = 'none';
           });
           payList.appendChild(row);
         });
       }
       function openPayDropdown() {
+        const card = document.querySelector('#page-payables .row .card:nth-child(2)');
+        const cr = card?.getBoundingClientRect();
+        const ir = payPartner.getBoundingClientRect();
+        const ddHead = payDD.querySelector('.dd-head');
+        if (ddHead) ddHead.style.display = 'none';
         payDD.style.display = 'block';
-        paySearch.value = '';
+        payDD.style.position = 'fixed';
+        if (cr) {
+          const pad = 16;
+           payDD.style.left = `${cr.left + pad}px`;
+           payDD.style.width = `${cr.width - pad*2}px`;
+        }
+        payDD.style.top = `${ir.bottom + 6}px`;
+        payDD.style.maxHeight = '60vh';
+        payDD.style.zIndex = '90';
         renderPayDropdown();
-        paySearch.focus();
       }
       payPartner.addEventListener('focus', openPayDropdown);
       payPartner.addEventListener('click', openPayDropdown);
-      paySearch.addEventListener('input', renderPayDropdown);
+      payPartner.addEventListener('input', renderPayDropdown);
+      paySearch?.addEventListener('input', renderPayDropdown);
       document.addEventListener('click', (e) => {
-        if (!payWrap?.contains(e.target)) payDD.style.display = 'none';
+        if (!payWrap?.contains(e.target) && !payDD?.contains(e.target)) payDD.style.display = 'none';
+        if (!thType?.contains(e.target)) thTypeDD.style.display = 'none';
+        if (!thSales?.contains(e.target)) thSalesDD.style.display = 'none';
+        if (!thArrears?.contains(e.target)) thArrearsDD.style.display = 'none';
+        if (!thTrust?.contains(e.target)) thTrustDD.style.display = 'none';
+        if (!ldType?.contains(e.target)) ldTypeDD.style.display = 'none';
+        if (!ldCat?.contains(e.target)) ldCatDD.style.display = 'none';
+        if (!ldOwner?.contains(e.target)) ldOwnerDD.style.display = 'none';
       });
+      const payHistoryModal = document.getElementById('pay-history-modal');
+      const payHistoryHead = document.getElementById('pay-history-head');
+      const payHistoryList = document.getElementById('pay-history-list');
+      const payHistoryClose = document.getElementById('pay-history-close');
+      const payHistoryNotesText = document.getElementById('pay-history-notes-text');
+      const payHistoryNotesInput = document.getElementById('pay-history-notes-input');
+      const payHistoryNotesAdd = document.getElementById('pay-history-notes-add');
+      let payHistoryCurrentRec = null;
+      function openPayHistory(rec) {
+        const total = (rec.amount || 0);
+        const paid = (rec.paid || 0);
+        const arrears = Math.max(0, total - paid);
+        payHistoryHead.innerHTML = `<div>单据号：${rec.doc || ''}　往来单位：${rec.partner || ''}　金额：${total.toFixed(2)}　已付：${paid.toFixed(2)}　欠款：${arrears.toFixed(2)}</div>`;
+        payHistoryNotesText.textContent = rec.notes || '';
+        if (payHistoryNotesInput) payHistoryNotesInput.value = '';
+        payHistoryCurrentRec = rec;
+        const hist = rec.history || [];
+        payHistoryList.innerHTML = '';
+        if (!hist.length) {
+          const div = document.createElement('div'); div.textContent = '暂无历史记录';
+          payHistoryList.appendChild(div);
+        } else {
+          hist.forEach(h => {
+            const row = document.createElement('div');
+            const amt = typeof h.amount === 'number' ? h.amount.toFixed(2) : (h.amount || '');
+            row.textContent = `${h.date || ''}  操作人员：${h.user || ''}  操作：${h.kind || ''}${amt ? '  金额：'+amt : ''}${h.method ? '  方式：'+h.method : ''}${h.notes ? '  备注：'+h.notes : ''}`;
+            payHistoryList.appendChild(row);
+          });
+        }
+        payHistoryModal.style.display = 'flex';
+      }
+      payHistoryClose?.addEventListener('click', () => { payHistoryModal.style.display = 'none'; });
+      payHistoryNotesAdd?.addEventListener('click', () => {
+        const rec = payHistoryCurrentRec;
+        const text = (payHistoryNotesInput?.value || '').trim();
+        if (!rec || !text) return;
+        const now = new Date();
+        const dt = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+        const user = (getAuthUser()?.name) || '';
+        rec.history = rec.history || [];
+        rec.history.push({ date: dt, user, kind: '备注', amount: '', partner: rec.partner, doc: rec.doc, notes: text });
+        rec.notes = [rec.notes || '', text].filter(Boolean).join('\n');
+        payHistoryNotesText.textContent = rec.notes || '';
+        const row = document.createElement('div');
+        row.textContent = `${dt}  操作人员：${user}  操作：备注  备注：${text}`;
+        payHistoryList.appendChild(row);
+        if (payHistoryNotesInput) payHistoryNotesInput.value = '';
+        renderPayables();
+        saveJSON('payRecords', payRecords);
+      });
+      function trustLabelDisplay(rec) {
+        if (rec.settled) return { label: '-', overdue: false };
+        const dValRaw = rec.trustDays;
+        if (dValRaw == null || isNaN(dValRaw)) return { label: '', overdue: false };
+        if (dValRaw === 0) return { label: '立即', overdue: false };
+        return { label: `${dValRaw}天`, overdue: false };
+      }
+      function summarizeNotes(text, perLine, maxLines) {
+        const s = String(text || '');
+        if (!s) return '';
+        const lines = s.split(/\r?\n/);
+        const out = [];
+        let overflow = false;
+        const take = Math.min(maxLines, lines.length);
+        for (let i = 0; i < take; i++) {
+          const chs = Array.from(lines[i] || '');
+          if (chs.length > perLine) { out.push(chs.slice(0, perLine).join('')); overflow = true; }
+          else { out.push(lines[i]); }
+        }
+        if (lines.length > maxLines) overflow = true;
+        if (overflow && out.length) out[out.length - 1] = out[out.length - 1] + '…';
+        return out.join('\n');
+      }
       function renderPayables() {
+        // 同步业务员下拉
+        if (paySales) {
+          const prev = paySales.value;
+          paySales.innerHTML = '<option value="">请选择业务员</option>';
+          (salesData || []).forEach(s => {
+            const opt = document.createElement('option'); opt.value = s.name; opt.textContent = s.name;
+            paySales.appendChild(opt);
+          });
+          if ([...paySales.options].some(o => o.value === prev)) paySales.value = prev;
+        }
         let recv = 0, pay = 0;
         for (const r of payRecords) {
           if (r.settled) continue;
@@ -1131,78 +1830,595 @@
         if (sumRecvEl) sumRecvEl.textContent = recv.toFixed(2);
         if (sumPayEl) sumPayEl.textContent = pay.toFixed(2);
         const key = (payFilterKey?.value || '').trim();
-        const list = payRecords.filter(r => {
+        let listAll = payRecords.filter(r => {
           if (!key) return true;
           return [r.partner||'', r.doc||'', r.notes||''].some(v => v.includes(key));
         });
+        if (payFilterType !== 'all') {
+          listAll = listAll.filter(r => (payFilterType === 'recv' ? /应收/.test(r.type) : /应付/.test(r.type)));
+        }
+        if (payFilterSalesName) {
+          listAll = listAll.filter(r => {
+            if (payFilterSalesName === '__none__') return !(r.sales);
+            return (r.sales || '') === payFilterSalesName;
+          });
+        }
+        if (payFilterOverdue !== 'all') {
+          listAll = listAll.filter(r => {
+            const trustDaysVal = r.trustDays ?? null;
+            let isOverdue = false;
+            if (!r.settled && trustDaysVal != null && trustDaysVal > 0) {
+              const start = new Date(r.date);
+              const now = new Date();
+              const diffDays = Math.floor((now - start) / (1000*60*60*24));
+              const overdueDays = diffDays - trustDaysVal;
+              if (overdueDays > 0) isOverdue = true;
+            }
+            return payFilterOverdue === 'overdue' ? isOverdue : !isOverdue;
+          });
+        }
+        if (payFilterStatus !== 'all') {
+          listAll = listAll.filter(r => {
+            const arrears = Math.max(0, (r.amount || 0) - (r.paid || 0));
+            if (payFilterStatus === 'arrears') return arrears > 0;
+            if (payFilterStatus === 'done') return arrears === 0;
+            return true;
+          });
+        }
+        // 按批次排序：最近一次上传的记录位于最前，同时批内保持表格行序
+        const hasBatch = listAll.some(r => r.batchAt);
+        const listSorted = hasBatch ? listAll.slice().sort((a,b) => {
+          const byBatch = (b.batchAt || 0) - (a.batchAt || 0);
+          if (byBatch !== 0) return byBatch;
+          const ao = (a.batchOrder != null) ? a.batchOrder : (a.createdAt || 0);
+          const bo = (b.batchOrder != null) ? b.batchOrder : (b.createdAt || 0);
+          return ao - bo;
+        }) : listAll;
+        const total = listSorted.length;
+        const totalPages = Math.max(1, Math.ceil(total / payPageSize));
+        if (payPage > totalPages) payPage = totalPages;
+        const startIdx = (payPage - 1) * payPageSize;
+        const list = listSorted.slice(startIdx, startIdx + payPageSize);
+        payLastPageData = list.slice();
         payRows.innerHTML = '';
         if (!list.length) {
           const tr = document.createElement('tr');
           tr.className = 'empty';
-          const td = document.createElement('td'); td.colSpan = 7; td.textContent = '暂无记录';
+          const td = document.createElement('td'); td.colSpan = 10; td.textContent = '暂无记录';
           tr.appendChild(td); payRows.appendChild(tr);
           return;
         }
         for (const r of list) {
           const tr = document.createElement('tr');
           const typeDisplay = /应收/.test(r.type) ? '应收' : '应付';
-          const trustDaysVal = r.trustDays ?? null;
-          const createLabel = (d) => {
-            if (d === 0) return '立即付款';
-            if (d === 30) return '30天';
-            if (d === 60) return '60天';
-            if (d === 90) return '90天';
-            if (d === 180) return '半年';
-            if (d === 365) return '一年';
-            return d != null ? `${d}天` : '';
-          };
-          let trustLabel = createLabel(trustDaysVal);
-          let isOverdue = false;
-          if (!r.settled && trustDaysVal != null && trustDaysVal > 0) {
-            const start = new Date(r.date);
-            const now = new Date();
-            const diffDays = Math.floor((now - start) / (1000*60*60*24));
-            const overdueDays = diffDays - trustDaysVal;
-            if (overdueDays > 0) {
-              trustLabel = `已逾期${overdueDays}天`;
-              isOverdue = true;
-            }
-          }
-          const cells = [typeDisplay, r.partner || '', r.doc || '', (r.amount||0).toFixed(2), trustLabel, r.notes || '', r.date];
-          cells.forEach((v, i) => {
-            const td = document.createElement('td');
-            td.textContent = v;
-            if (i === 4 && isOverdue) td.classList.add('overdue');
-            tr.appendChild(td);
+          const tl = trustLabelDisplay(r);
+          const trustLabel = tl.label;
+          const isOverdue = tl.overdue;
+          const paid = r.paid || 0;
+          const arrears = Math.max(0, (r.amount || 0) - paid);
+          const tdType = document.createElement('td'); tdType.textContent = typeDisplay; tr.appendChild(tdType);
+          const tdPartner = document.createElement('td'); tdPartner.textContent = r.partner || ''; tr.appendChild(tdPartner);
+          const tdDoc = document.createElement('td');
+          const docUp = document.createElement('div'); docUp.textContent = (r.doc || '');
+          const docDown = document.createElement('div'); docDown.textContent = r.source === 'import' ? parseDateCN(r.date || '') : ''; docDown.style.color = '#9ca3af'; docDown.style.fontSize = '12px';
+          tdDoc.appendChild(docUp); if (docDown.textContent) tdDoc.appendChild(docDown);
+          tr.appendChild(tdDoc);
+          const tdAmount = document.createElement('td'); tdAmount.textContent = (r.amount||0).toFixed(2); tr.appendChild(tdAmount);
+          const tdInv = document.createElement('td');
+          const invUp = document.createElement('div'); invUp.textContent = (r.invoiceNo || '-');
+          const invDown = document.createElement('div'); invDown.textContent = parseDateCN(r.invoiceDate || ''); invDown.style.color = '#9ca3af'; invDown.style.fontSize = '12px';
+          tdInv.appendChild(invUp); tdInv.appendChild(invDown);
+          tr.appendChild(tdInv);
+          const tdInvAmt = document.createElement('td');
+          const invAmtNum = Number(r.invoiceAmount || 0);
+          tdInvAmt.textContent = (invAmtNum > 0 && isFinite(invAmtNum)) ? invAmtNum.toFixed(2) : '-';
+          tr.appendChild(tdInvAmt);
+          const tdAr = document.createElement('td'); tdAr.textContent = arrears.toFixed(2); tr.appendChild(tdAr);
+          const tdTrust = document.createElement('td'); tdTrust.textContent = trustLabel; if (isOverdue) tdTrust.classList.add('overdue'); tr.appendChild(tdTrust);
+          const tdNotes = document.createElement('td');
+          tdNotes.textContent = summarizeNotes(r.notes, 10, 2);
+          tdNotes.style.whiteSpace = 'pre-wrap';
+          tdNotes.style.wordBreak = 'break-all';
+          tr.appendChild(tdNotes);
+          const tdSales = document.createElement('td'); tdSales.textContent = r.sales || '-'; tr.appendChild(tdSales);
+          const tdDate = document.createElement('td'); tdDate.textContent = (r.source === 'manual' ? formatDateFromTs(r.createdAt) : parseDateCN(r.date || '') || formatDateFromTs(Date.parse(r.date))); tr.appendChild(tdDate);
+          const ops = document.createElement('td');
+          const btn = document.createElement('a'); btn.href='#'; btn.textContent='详情'; btn.className='link-blue';
+          ops.appendChild(btn);
+          tr.appendChild(ops);
+          btn.addEventListener('click', e => {
+            e.preventDefault();
+            openPayHistory(r);
           });
           if (r.settled) tr.classList.add('pay-row-settled');
           else if (typeDisplay === '应收') tr.classList.add('pay-row-recv');
           else tr.classList.add('pay-row-pay');
           payRows.appendChild(tr);
         }
+        if (payTableWrap) payTableWrap.scrollTop = 0;
+        if (payPager) {
+          payPager.innerHTML = '';
+          const makeBtn = (label, page, disabled=false, active=false) => {
+            const b = document.createElement('a');
+            b.href = '#'; b.textContent = label;
+            b.style.padding = '4px 8px';
+            b.style.border = '1px solid #334155';
+            b.style.borderRadius = '4px';
+            b.style.color = active ? '#000' : '#cbd5e1';
+            b.style.background = active ? '#cbd5e1' : 'transparent';
+            b.style.pointerEvents = disabled ? 'none' : 'auto';
+            b.style.opacity = disabled ? '0.4' : '1';
+            b.addEventListener('click', e => { e.preventDefault(); payPage = page; renderPayables(); });
+            payPager.appendChild(b);
+          };
+          makeBtn('«', Math.max(1, payPage-1), payPage<=1);
+          const maxButtons = 9;
+          let start = Math.max(1, payPage - Math.floor(maxButtons/2));
+          let end = Math.min(totalPages, start + maxButtons - 1);
+          start = Math.max(1, end - maxButtons + 1);
+          for (let p = start; p <= end; p++) makeBtn(String(p), p, false, p===payPage);
+          makeBtn('»', Math.min(totalPages, payPage+1), payPage>=totalPages);
+        }
+        if (payFooterInfo) {
+          const totalCount = payRecords.length;
+          const today = formatDateFromTs(Date.now());
+          const todayCount = payRecords.filter(r => formatDateFromTs(r.createdAt) === today).length;
+          const latestBatch = Math.max(0, ...payRecords.map(r => r.batchAt || 0));
+          const latestBatchCount = latestBatch ? payRecords.filter(r => (r.batchAt||0) === latestBatch).length : (payRecords.length ? 1 : 0);
+          payFooterInfo.innerHTML = '';
+          const mk = (text) => { const s = document.createElement('span'); s.className = 'info-pill'; s.textContent = text; return s; };
+          payFooterInfo.appendChild(mk(`共 ${totalCount} 条记录`));
+          payFooterInfo.appendChild(mk(`今日上传 ${todayCount} 条`));
+          payFooterInfo.appendChild(mk(`最后次上传 ${latestBatchCount} 条`));
+        }
       }
-      payFilterKey?.addEventListener('input', renderPayables);
+      payFilterKey?.addEventListener('input', () => { payPage = 1; renderPayables(); });
+      payExportBtn?.addEventListener('click', () => {
+        const data = payLastPageData || [];
+        if (!data.length) { alert('当前页面无记录可导出'); return; }
+        const rows = [];
+        rows.push(['款项类型','往来单位','单据/凭证号','业务员','金额','发票号','发票日期','发票金额','欠款','信任天数','备注','日期']);
+        data.forEach(r => {
+          const typeDisplay = /应收/.test(r.type) ? '应收' : '应付';
+          const tl = trustLabelDisplay(r);
+          const trustLabel = tl.label;
+          const paid = r.paid || 0;
+          const arrears = Math.max(0, (r.amount || 0) - paid);
+          const invAmtCell = (Number(r.invoiceAmount||0) > 0) ? (r.invoiceAmount||0).toFixed(2) : '-';
+          const outDate = (r.source === 'manual') ? (formatDateFromTs(r.createdAt) || '') : (r.date || '');
+          rows.push([typeDisplay, r.partner || '', r.doc || '', r.sales || '', (r.amount||0).toFixed(2), r.invoiceNo || '', r.invoiceDate || '', invAmtCell, arrears.toFixed(2), trustLabel, r.notes || '', outDate]);
+        });
+        let html = '<html><head><meta charset="UTF-8"></head><body><table border="1">';
+        rows.forEach(r => { html += '<tr>' + r.map(c => `<td>${String(c).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</td>`).join('') + '</tr>'; });
+        html += '</table></body></html>';
+        const blob = new Blob([html], { type: 'application/vnd.ms-excel;charset=UTF-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        const now = new Date();
+        const ts = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}${String(now.getSeconds()).padStart(2,'0')}`;
+        a.download = `应收应付账款_${ts}.xls`;
+        a.href = url;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      });
+      payClearBtn?.addEventListener('click', () => {
+        if (!payRecords.length) { alert('当前无记录'); return; }
+        if (!confirm('确定清空应收/应付所有记录？此操作不可恢复')) return;
+        payRecords.splice(0, payRecords.length);
+        saveJSON('payRecords', payRecords);
+        payPage = 1;
+        renderPayables();
+      });
       payForm?.addEventListener('submit', e => {
         e.preventDefault();
+        if (payImportParsed.length) {
+          let covered = 0, inserted = 0, createdCustomers = 0, createdMerchants = 0;
+          const batchAt = Date.now();
+          let batchOrder = 0;
+          payImportParsed.forEach(rec => {
+            rec.batchAt = batchAt;
+            rec.batchOrder = batchOrder++;
+            rec.createdAt = batchAt;
+            const existedBefore = [...contactsData.customers, ...contactsData.merchants, ...contactsData.others]
+              .some(x => (x.name||'') === (rec.partner||''));
+            ensureContactForPartner(rec.partner, rec.type, rec.sales);
+            if (!existedBefore && (rec.partner||'').trim()) {
+              if (/应付/.test(rec.type)) createdMerchants++; else createdCustomers++;
+            }
+            const hasKey = (rec.partner||'').trim() && (rec.doc||'').trim();
+            if (hasKey) {
+              const ex = findExistingPayRecord(rec);
+              if (ex) { mergePayRecord(ex, rec); ex.batchAt = batchAt; ex.batchOrder = rec.batchOrder; ex.createdAt = batchAt; covered++; return; }
+            }
+            payRecords.push(rec); inserted++;
+          });
+          payImportParsed = [];
+          if (payImportFile) payImportFile.value = '';
+          if (payImportHint) payImportHint.textContent = '批量导入完成';
+          payPage = 1;
+          renderPayables();
+          if (contactsSearch) contactsSearch.value = '';
+          renderContacts();
+          saveJSON('payRecords', payRecords);
+          saveJSON('contactsData', contactsData);
+          alert(`导入完成：新增记录 ${inserted} 条，覆盖更新 ${covered} 条，新增客户 ${createdCustomers} 条，新增商家 ${createdMerchants} 条。`);
+          return;
+        }
         const type = payType.value;
         const partner = payPartner.value.trim();
         const doc = payDoc.value.trim();
+        const sales = (paySales?.value || '').trim();
         const amount = parseFloat(payAmount.value);
         const trustDays = parseInt(payTrust.value || '0', 10);
         const notes = payNotes.value.trim();
         if (!type || !partner || !amount) return;
         const now = new Date();
         const date = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
-        payRecords.push({ type, partner, doc, amount, trustDays, notes, date, settled:false });
+        const dateTime = `${date} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+        const creator = (getAuthUser()?.name) || '';
+        const rec = { type, partner, doc, sales, amount, paid: 0, trustDays, notes, date, settled:false, history: [], createdAt: Date.now(), invoiceNo:'', invoiceDate:'', invoiceAmount:0, source:'manual' };
+        rec.batchAt = Date.now();
+        rec.batchOrder = 0;
+        rec.history.push({ date: dateTime, user: creator, kind: '创建', amount, partner, doc, notes });
+        payRecords.push(rec);
         payPartner.value = '';
         payDoc.value = '';
+        if (paySales) paySales.value = '';
         payAmount.value = '';
         payTrust.value = '30';
         payNotes.value = '';
+        payPage = 1;
         renderPayables();
         renderContacts();
         saveJSON('payRecords', payRecords);
         saveJSON('contactsData', contactsData);
+      });
+      let payImportParsed = [];
+      let payImportInvalidCount = 0;
+      function parseCSV(text) {
+        const rows = [];
+        let i = 0, cur = '', inQ = false, row = [];
+        while (i < text.length) {
+          const ch = text[i];
+          if (inQ) {
+            if (ch === '"') {
+              if (text[i+1] === '"') { cur += '"'; i += 2; continue; }
+              inQ = false; i++; continue;
+            }
+            cur += ch; i++; continue;
+          }
+          if (ch === '"') { inQ = true; i++; continue; }
+          if (ch === ',') { row.push(cur.trim()); cur = ''; i++; continue; }
+          if (ch === '\n') { row.push(cur.trim()); rows.push(row); row = []; cur = ''; i++; continue; }
+          if (ch === '\r') { i++; continue; }
+          cur += ch; i++;
+        }
+        if (cur.length || row.length) { row.push(cur.trim()); rows.push(row); }
+        return rows;
+      }
+      function parseXLS(html) {
+        const doc = new DOMParser().parseFromString(html, 'text/html');
+        const table = doc.querySelector('table');
+        const rows = [];
+        if (!table) return rows;
+        table.querySelectorAll('tr').forEach(tr => {
+          const row = [];
+          tr.querySelectorAll('td,th').forEach(td => row.push(td.textContent.trim()));
+          if (row.length) rows.push(row);
+        });
+        return rows;
+      }
+      function parseXLSX(buffer) {
+        try {
+          const wb = XLSX.read(buffer, { type: 'array' });
+          const wsname = wb.SheetNames[0];
+          const ws = wb.Sheets[wsname];
+          const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true });
+          return rows || [];
+        } catch (e) {
+          alert('解析 .xlsx 文件失败');
+          return [];
+        }
+      }
+      function parseTrustDays(val) {
+        const s = String(val || '').trim();
+        if (!s) return NaN;
+        if (s.includes('立即')) return 0;
+        const m = new RegExp('(\\d+)').exec(s);
+        return m ? parseInt(m[1], 10) : NaN;
+      }
+      function parseDateCN(text) {
+        const s = String(text || '').trim();
+        if (!s) return '';
+        if (/^\d{4}[-\/\.]\d{1,2}[-\/\.]\d{1,2}$/.test(s)) {
+          const parts = s.split(/[-\/\.]/);
+          const y = parts[0];
+          const mm = String(parseInt(parts[1],10)).padStart(2,'0');
+          const dd = String(parseInt(parts[2],10)).padStart(2,'0');
+          return `${y}-${mm}-${dd}`;
+        }
+        const mCNFull = new RegExp('(\\d{4})\\s*年\\s*(\\d{1,2})\\s*月\\s*(\\d{1,2})\\s*日').exec(s);
+        if (mCNFull) {
+          const y = mCNFull[1];
+          const mm = String(parseInt(mCNFull[2],10)).padStart(2,'0');
+          const dd = String(parseInt(mCNFull[3],10)).padStart(2,'0');
+          return `${y}-${mm}-${dd}`;
+        }
+        const mCN = new RegExp('(\\d{1,2})\\s*月\\s*(\\d{1,2})\\s*日').exec(s);
+        if (mCN) {
+          const y = new Date().getFullYear();
+          const mm = String(parseInt(mCN[1],10)).padStart(2,'0');
+          const dd = String(parseInt(mCN[2],10)).padStart(2,'0');
+          return `${y}-${mm}-${dd}`;
+        }
+        const mMD = new RegExp('(\\d{1,2})[-\\/\\.]?(\\d{1,2})$').exec(s);
+        if (mMD) {
+          const y = new Date().getFullYear();
+          const mm = String(parseInt(mMD[1],10)).padStart(2,'0');
+          const dd = String(parseInt(mMD[2],10)).padStart(2,'0');
+          return `${y}-${mm}-${dd}`;
+        }
+        return s;
+      }
+      function formatDateFromTs(ts) {
+        if (!ts) return '';
+        const d = new Date(ts);
+        const y = d.getFullYear();
+        const m = String(d.getMonth()+1).padStart(2,'0');
+        const dd = String(d.getDate()).padStart(2,'0');
+        return `${y}-${m}-${dd}`;
+      }
+      function rowToRecord(cols) {
+        const [typeCol, partner, doc, date, amountCol, invoiceNo, invoiceDate, invoiceAmountCol, trustCol, notes, sales] = cols;
+        const type = /应付/.test(String(typeCol)) ? '应付账款' : '应收账款';
+        const amount = parseFloat(String(amountCol).replace(/,/g,'')) || 0;
+        const trustDaysIn = parseTrustDays(trustCol);
+        const trustDays = Number.isFinite(trustDaysIn) ? trustDaysIn : parseInt(document.getElementById('pay-trust')?.value || '30', 10);
+        const now = new Date();
+        const creator = (getAuthUser()?.name) || '';
+        const createdAt = Date.now();
+        const dIn = parseDateCN(date);
+        const d = (dIn && new RegExp('^\\d{4}-\\d{2}-\\d{2}$').test(dIn)) ? dIn :
+          `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+        const dt = `${d} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+        const invoiceAmount = parseFloat(String(invoiceAmountCol||'').replace(/,/g,'')) || 0;
+        const rec = { type, partner: String(partner||'').trim(), doc: String(doc||'').trim(), sales, amount, paid: 0, trustDays, notes, date: d, settled:false, history: [], createdAt, invoiceNo: (invoiceNo||''), invoiceDate: parseDateCN(invoiceDate||''), invoiceAmount, source: 'import' };
+        rec.history.push({ date: dt, user: creator, kind: '创建', amount, partner, doc, notes });
+        if (invoiceNo || invoiceAmount) {
+          rec.history.push({ date: dt, user: creator, kind: '发票', amount: invoiceAmount, partner, doc, notes: `发票号:${invoiceNo||'-'} 发票日期:${rec.invoiceDate||'-'}` });
+        }
+        return rec;
+      }
+      function previewImport(rows) {
+        const headerRow = rows[0] ? rows[0].map(x => String(x).trim()) : [];
+        const hasHeader = headerRow.some(x => /类型|款项|往来单位|凭证|发票|日期/.test(x));
+        const dataRows = hasHeader ? rows.slice(1) : rows;
+        function idxOf(names) {
+          for (const n of names) {
+            const i = headerRow.findIndex(h => h && h.includes(n));
+            if (i >= 0) return i;
+          }
+          return -1;
+        }
+        const idx = {
+          type: hasHeader ? idxOf(['应收应付']) : 0,
+          partner: hasHeader ? idxOf(['往来单位']) : 1,
+          doc: hasHeader ? idxOf(['单据凭证号']) : 2,
+          date: hasHeader ? idxOf(['出单日期']) : 3,
+          amount: hasHeader ? idxOf(['订单金额']) : 4,
+          invoiceNo: hasHeader ? idxOf(['发票号']) : 5,
+          invoiceDate: hasHeader ? idxOf(['发票日期']) : 6,
+          invoiceAmount: hasHeader ? idxOf(['发票金额']) : 7,
+          trustDays: hasHeader ? idxOf(['信任天数']) : 8,
+          notes: hasHeader ? idxOf(['备注']) : 9,
+          sales: hasHeader ? idxOf(['业务员']) : 10,
+        };
+        // 验证A列与页面选择一致
+        const selectedType = payType?.value || '';
+        const selectedFlag = /应付/.test(selectedType) ? '应付' : '应收';
+        payImportParsed = [];
+        payImportInvalidCount = 0;
+        payImportRows.innerHTML = '';
+        let cntTypeMismatch = 0;
+        let cntUpdatedEst = 0;
+        let cntNewCustomersEst = 0;
+        let cntNewMerchantsEst = 0;
+        let parsedVisibleCount = 0;
+        let requiredMissingCount = 0;
+        const existCustomers = new Set((contactsData.customers||[]).map(x => String(x.name||'').trim()));
+        const existMerchants = new Set((contactsData.merchants||[]).map(x => String(x.name||'').trim()));
+        dataRows.forEach(row => {
+          let rowType = String(row[idx.type] ?? '').trim();
+          const originalTypeEmpty = !rowType;
+          if (!rowType) rowType = selectedFlag; // 空类型按页面选择容错，但仍标记为错误
+          const partnerName = String(row[idx.partner] ?? '').trim();
+          const docVal = String(row[idx.doc] ?? '').trim();
+          const amtVal = String(row[idx.amount] ?? '').trim();
+          if (![rowType, partnerName, docVal, amtVal].some(v => String(v||'').trim())) return;
+          const colsX = [
+            row[idx.type] ?? '',
+            partnerName,
+            row[idx.doc] ?? '',
+            row[idx.date] ?? '',
+            row[idx.amount] ?? '',
+            row[idx.invoiceNo] ?? '',
+            row[idx.invoiceDate] ?? '',
+            row[idx.invoiceAmount] ?? '',
+            row[idx.trustDays] ?? '',
+            row[idx.notes] ?? '',
+            row[idx.sales] ?? '',
+          ];
+          const tr = document.createElement('tr');
+          let isErrorRow = false;
+          let errorReason = '';
+          if (rowType && !rowType.includes(selectedFlag)) { isErrorRow = true; errorReason = '性质不匹配：页面与A列不一致'; cntTypeMismatch++; colsX[0] = selectedFlag; }
+          const missType = originalTypeEmpty;
+          const missPartner = !partnerName;
+          const missDoc = !docVal;
+          const missAmount = !amtVal;
+          if (missPartner) { isErrorRow = true; errorReason = errorReason ? (errorReason + '；店名为空') : '店名为空'; payImportInvalidCount++; }
+          const isRequiredMissing = missType || missPartner || missDoc || missAmount;
+          if (isRequiredMissing) requiredMissingCount++;
+          const previewCells = [
+            row[idx.type] ?? '',
+            partnerName,
+            row[idx.doc] ?? '',
+            row[idx.date] ?? '',
+            row[idx.amount] ?? '',
+            row[idx.invoiceNo] ?? '',
+            row[idx.invoiceDate] ?? '',
+            row[idx.invoiceAmount] ?? '',
+            row[idx.trustDays] ?? '',
+            row[idx.notes] ?? '',
+            row[idx.sales] ?? '',
+          ];
+          previewCells.forEach((v, ci) => {
+            const td = document.createElement('td');
+            td.textContent = String(v ?? '');
+            const needHighlight = (ci === 0 && missType) || (ci === 1 && missPartner) || (ci === 2 && missDoc) || (ci === 4 && missAmount);
+            if (needHighlight || (isErrorRow && (ci === 0 || ci === 1))) { td.className = 'error-cell'; td.title = errorReason || '必填项为空'; }
+            tr.appendChild(td);
+          });
+          payImportRows.appendChild(tr);
+          if (isRequiredMissing) return;
+          parsedVisibleCount++;
+          const rec = rowToRecord(colsX);
+          payImportParsed.push(rec);
+          const existsRec = findExistingPayRecord(rec);
+          if (existsRec) cntUpdatedEst++;
+          const isRecv = /应收/.test(rec.type);
+          if (isRecv) {
+            if (!existCustomers.has(rec.partner.trim())) cntNewCustomersEst++;
+          } else {
+            if (!existMerchants.has(rec.partner.trim())) cntNewMerchantsEst++;
+          }
+        });
+        const summary = [
+          `已解析 ${parsedVisibleCount} 条`,
+          (cntUpdatedEst ? `预计覆盖 ${cntUpdatedEst} 条` : ''),
+          ((cntNewCustomersEst+cntNewMerchantsEst) ? `预计新增客户/商家 ${cntNewCustomersEst+cntNewMerchantsEst} 条` : ''),
+          (payImportInvalidCount ? `已跳过店名为空 ${payImportInvalidCount} 条` : ''),
+          (cntTypeMismatch ? `性质不匹配 ${cntTypeMismatch} 条（A列与页面不一致，不导入）` : ''),
+          (requiredMissingCount ? `存在必填项为空 ${requiredMissingCount} 条（应收应付/往来单位/凭证号/订单金额），请修正后再入库` : ''),
+        ].filter(Boolean).join(' | ');
+        payImportSummary.textContent = summary;
+        if (payImportHint) {
+          if (requiredMissingCount) payImportHint.textContent = `存在必填项为空 ${requiredMissingCount} 条，无法入库`;
+          else payImportHint.textContent = `已选择 ${parsedVisibleCount} 条，点击下方提交完成入库`;
+        }
+        if (typeof payImportCommit !== 'undefined' && payImportCommit) {
+          payImportCommit.disabled = !!requiredMissingCount || !payImportParsed.length;
+        }
+      }
+      payImportFile?.addEventListener('change', () => {
+        const file = payImportFile?.files?.[0];
+        if (!file) { return; }
+        const name = (file.name || '').toLowerCase();
+        const reader = new FileReader();
+        try { payImportModal.style.display = 'flex'; setImportModalWidth(); } catch {}
+        if (name.endsWith('.csv')) {
+          reader.onload = () => { try { previewImport(parseCSV(reader.result)); setImportModalWidth(); } catch {} };
+          reader.readAsText(file, 'utf-8');
+        } else if (name.endsWith('.xls')) {
+          reader.onload = () => { try { previewImport(parseXLS(reader.result)); setImportModalWidth(); } catch {} };
+          reader.readAsText(file, 'utf-8');
+        } else if (name.endsWith('.xlsx')) {
+          reader.onload = () => { try { previewImport(parseXLSX(reader.result)); setImportModalWidth(); } catch {} };
+          reader.readAsArrayBuffer(file);
+        } else {
+          alert('不支持的文件类型');
+        }
+      });
+      function setImportModalWidth() {
+        const card = document.querySelector('#page-payables .card');
+        const modalBox = document.querySelector('#pay-import-modal .modal');
+        if (card && modalBox) {
+          const w = Math.floor(card.getBoundingClientRect().width);
+          modalBox.style.width = w + 'px';
+          modalBox.style.maxWidth = 'none';
+        }
+      }
+      payImportCancel?.addEventListener('click', () => { payImportModal.style.display = 'none'; });
+      function ensureContactForPartner(name, type, salesName) {
+        const pname = String(name || '').trim();
+        if (!pname) return;
+        const tab = /应付/.test(type) ? 'merchants' : 'customers';
+        const ownerLabel = tab === 'merchants' ? '商家' : '客户';
+        const existsInTab = (contactsData[tab] || []).some(x => (String(x.name||'').trim()) === pname);
+        if (existsInTab) return;
+        const now = new Date();
+        const created = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+        contactsData[tab].push({ name: pname, contact:'', phone:'', city:'', remark:'', owner: ownerLabel, created, company:'', code:'', country:'', address:'', zip:'', sales: (salesName||'').trim() });
+      }
+      function findExistingPayRecord(rec) {
+        const p = String(rec.partner || '').trim();
+        const d = String(rec.doc || '').trim();
+        return payRecords.find(r =>
+          r.type === rec.type &&
+          String(r.partner||'').trim() === p &&
+          String(r.doc||'').trim() === d
+        );
+      }
+      function mergePayRecord(target, src) {
+        const now = new Date();
+        const dateTime = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+        const user = (getAuthUser()?.name) || '';
+        target.sales = src.sales || target.sales || '';
+        if (!isNaN(src.amount)) target.amount = src.amount;
+        if (!isNaN(src.paid)) target.paid = src.paid;
+        if (!isNaN(src.trustDays)) target.trustDays = src.trustDays;
+        target.notes = src.notes || target.notes || '';
+        target.date = src.date || target.date;
+        target.invoiceNo = src.invoiceNo || target.invoiceNo || '';
+        target.invoiceDate = src.invoiceDate || target.invoiceDate || '';
+        if (!isNaN(src.invoiceAmount)) target.invoiceAmount = src.invoiceAmount;
+        target.settled = false;
+        target.history = target.history || [];
+        target.history.push({ date: dateTime, user, kind: '导入覆盖', amount: src.amount, partner: target.partner, doc: target.doc, notes: '批量导入覆盖现有记录' });
+        if (src.invoiceNo || src.invoiceAmount) {
+          target.history.push({ date: dateTime, user, kind: '发票', amount: src.invoiceAmount, partner: target.partner, doc: target.doc, notes: `发票号:${src.invoiceNo||'-'} 发票日期:${src.invoiceDate||'-'}` });
+        }
+        if (src.paid) {
+          target.history.push({ date: dateTime, user, kind: '银行付款', amount: src.paid, partner: target.partner, doc: target.doc, notes: '' });
+        }
+      }
+      payImportCommit?.addEventListener('click', () => {
+        if (!payImportParsed.length) { alert('没有可导入的数据或存在必填项为空，无法入库'); return; }
+        let createdCustomers = 0, createdMerchants = 0;
+        let covered = 0, inserted = 0;
+        const batchAt = Date.now();
+        let batchOrder = 0;
+        const beforeCustomers = new Set((contactsData.customers||[]).map(x => String(x.name||'').trim()));
+        const beforeMerchants = new Set((contactsData.merchants||[]).map(x => String(x.name||'').trim()));
+        payImportParsed.forEach(rec => {
+          rec.batchAt = batchAt;
+          rec.batchOrder = batchOrder++;
+          rec.createdAt = batchAt;
+          const existedBefore = [...contactsData.customers, ...contactsData.merchants, ...contactsData.others]
+            .some(x => (x.name||'') === (rec.partner||''));
+          ensureContactForPartner(rec.partner, rec.type, rec.sales);
+          if (!existedBefore && (rec.partner||'').trim()) {
+            if (/应付/.test(rec.type)) createdMerchants++; else createdCustomers++;
+          }
+          const hasKey = (rec.partner||'').trim() && (rec.doc||'').trim();
+          if (hasKey) {
+            const ex = findExistingPayRecord(rec);
+            if (ex) { mergePayRecord(ex, rec); ex.batchAt = batchAt; ex.batchOrder = rec.batchOrder; ex.createdAt = batchAt; ex.source = 'import'; covered++; return; }
+          }
+          payRecords.push(rec); inserted++;
+        });
+        payImportParsed = [];
+        payImportInvalidCount = 0;
+        payImportModal.style.display = 'none';
+        payPage = 1;
+        renderPayables();
+        // 不自动跳转页面，仅刷新“往来单位”数据，用户可自行查看
+        renderContacts?.();
+        saveJSON('payRecords', payRecords);
+        saveJSON('contactsData', contactsData);
+        alert(`导入完成：新增记录 ${inserted} 条，覆盖更新 ${covered} 条，新增客户 ${createdCustomers} 条，新增商家 ${createdMerchants} 条。`);
       });
       let contactsTab = 'customers';
       const contactsRows = document.getElementById('contacts-rows');
@@ -1210,6 +2426,8 @@
       const confirmModal = document.getElementById('confirm-modal');
       const confirmCancel = document.getElementById('confirm-cancel');
       const confirmOk = document.getElementById('confirm-ok');
+      let contactsPage = 1;
+      const contactsPageSize = 100;
       let pendingDeleteIndex = null;
       let pendingDeleteTab = null;
       function partnerTotal(name) {
@@ -1217,21 +2435,122 @@
         payRecords.forEach(r => { if ((r.partner||'') === name) sum += r.amount || 0; });
         return sum.toFixed(2);
       }
+      function partnerArrears(name, ownerLabel) {
+        let sum = 0;
+        payRecords.forEach(r => {
+          if ((r.partner||'') !== name) return;
+          const isRecv = /应收/.test(r.type||'');
+          const isPay = /应付/.test(r.type||'');
+          if (ownerLabel === '客户' && !isRecv) return;
+          if (ownerLabel === '商家' && !isPay) return;
+          const arrears = Math.max(0, (r.amount||0) - (r.paid||0));
+          sum += arrears;
+        });
+        return sum.toFixed(2);
+      }
+      function formatDateTime(ts) {
+        if (!ts) return '';
+        const d = new Date(ts);
+        const y = d.getFullYear();
+        const m = String(d.getMonth()+1).padStart(2,'0');
+        const dd = String(d.getDate()).padStart(2,'0');
+        const hh = String(d.getHours()).padStart(2,'0');
+        const mm = String(d.getMinutes()).padStart(2,'0');
+        return `${y}-${m}-${dd} ${hh}:${mm}`;
+      }
+      function openAmountHistory(partnerName, ownerLabel) {
+        const modal = document.getElementById('amount-history-modal');
+        const head = document.getElementById('amount-history-head');
+        const rowsEl = document.getElementById('amount-history-rows');
+        const list = [];
+        payRecords.forEach(r => {
+          if ((r.partner||'') !== partnerName) return;
+          const ts = r.createdAt || (r.date ? Date.parse(r.date) : 0);
+          const amt = Number(r.amount||0);
+          const isRecv = /应收/.test(r.type||'');
+          const change = isRecv ? amt : -amt;
+          const label = isRecv ? `应收账款记录 + ${amt.toFixed(2)}` : `应付账款记录 - ${amt.toFixed(2)}`;
+          const user = (r.history && r.history[0] && r.history[0].user) || (getAuthUser()?.name || '');
+          list.push({ ts, doc: r.doc || '', change, label, user });
+        });
+        records.forEach(rec => {
+          if ((rec.client||'') !== partnerName) return;
+          if (rec.type === '收入') {
+            const ts = rec.createdAt || (rec.dateTime ? Date.parse(rec.dateTime) : (rec.date ? Date.parse(rec.date) : 0));
+            const amt = Number(rec.amount||0);
+            const change = -amt;
+            const label = `收支记账收入 - ${amt.toFixed(2)}`;
+            const user = getAuthUser()?.name || '';
+            list.push({ ts, doc: rec.doc || '', change, label, user });
+          }
+        });
+        list.sort((a,b) => a.ts - b.ts);
+        let cum = 0;
+        const withCum = list.map(x => { cum += x.change; return { ...x, cum }; });
+        rowsEl.innerHTML = '';
+        const render = [...withCum].reverse();
+        render.forEach((x, idx) => {
+          const tr = document.createElement('tr');
+          const seq = document.createElement('td'); seq.textContent = String(render.length - idx); tr.appendChild(seq);
+          const dt = document.createElement('td'); dt.textContent = formatDateTime(x.ts); tr.appendChild(dt);
+          const doc = document.createElement('td'); doc.textContent = x.doc || '-'; tr.appendChild(doc);
+          const change = document.createElement('td'); change.textContent = x.label; tr.appendChild(change);
+          const arrears = document.createElement('td'); arrears.textContent = Number.isFinite(x.cum) ? x.cum.toFixed(2) : '-'; tr.appendChild(arrears);
+          const user = document.createElement('td'); user.textContent = x.user || '-'; tr.appendChild(user);
+          rowsEl.appendChild(tr);
+        });
+        head.textContent = `往来单位：${partnerName}`;
+        modal.style.display = 'flex';
+        document.getElementById('amount-history-close')?.addEventListener('click', () => { modal.style.display = 'none'; });
+      }
       function renderContacts() {
         const list = contactsData[contactsTab] || [];
         const key = (contactsSearch?.value || '').trim();
-        const data = list.filter(x => {
+        const filtered = list.filter(x => {
           if (!key) return true;
-          return [x.name,x.contact,x.phone,x.city,x.remark].some(v => (v||'').includes(key));
+          const k = String(key).toLowerCase();
+          return [x.name, x.company, x.code, x.contact, x.phone, x.sales]
+            .some(v => String(v||'').toLowerCase().includes(k));
         });
+        const total = filtered.length;
+        const totalPages = Math.max(1, Math.ceil(total / contactsPageSize));
+        if (contactsPage > totalPages) contactsPage = totalPages;
+        const startIdx = (contactsPage - 1) * contactsPageSize;
+        const data = filtered.slice(startIdx, startIdx + contactsPageSize);
+        const gp = document.getElementById('global-pager'); if (gp) gp.style.display = 'flex';
+        // 同步业务员下拉
+        const sel = document.getElementById('ct-sales');
+        if (sel) {
+          const prev = sel.value;
+          sel.innerHTML = '<option value="">请选择业务员</option>';
+          (salesData || []).forEach(s => {
+            const opt = document.createElement('option'); opt.value = s.name; opt.textContent = s.name;
+            sel.appendChild(opt);
+          });
+          if ([...sel.options].some(o => o.value === prev)) sel.value = prev;
+        }
         contactsRows.innerHTML = '';
         for (const r of data) {
           const tr = document.createElement('tr');
           const ops = document.createElement('td');
           ops.className = 'actions';
-          ops.innerHTML = '<a href="#" class="link-blue">编辑</a><a href="#" class="link-red">删除</a><a href="#ledger" class="link-green">查看近期记录</a>';
-          const cells = [r.name, r.company || '', r.code || '', r.contact, r.phone, r.city, r.remark || '', partnerTotal(r.name), r.created];
-          for (const v of cells) { const td = document.createElement('td'); td.textContent = v; tr.appendChild(td); }
+          ops.innerHTML = '<a href="#" class="link-blue">编辑</a><a href="#" class="link-red">删除</a><a href="#ledger" class="link-green">订单记录</a><a href="#" class="link-orange">金额记录</a>';
+          const cells = [r.name, r.company || '', r.code || '', r.contact, r.phone, r.city, r.remark || '', r.sales || '-', partnerTotal(r.name), partnerArrears(r.name, r.owner || ''), r.created];
+          cells.forEach((v, idx) => {
+            const td = document.createElement('td');
+            if (idx === 9) {
+              const num = parseFloat(String(v));
+              if (isFinite(num) && num <= 0) {
+                td.textContent = '-';
+              } else {
+                td.textContent = Number.isFinite(num) ? num.toFixed(2) : String(v||'');
+                td.style.color = '#ef4444';
+              }
+            } else {
+              td.textContent = v;
+            }
+            tr.appendChild(td);
+          });
           tr.appendChild(ops);
           contactsRows.appendChild(tr);
           const del = ops.querySelector('.link-red');
@@ -1250,8 +2569,57 @@
               editingTab = contactsTab;
               fillContactsForm(r);
               ctSubmitBtn.textContent = '保存';
+            if (ctSubmitTop) ctSubmitTop.textContent = '保存';
             }
           });
+          const amountLink = ops.querySelector('.link-orange');
+          amountLink.addEventListener('click', e => {
+            e.preventDefault();
+            openAmountHistory(r.name, r.owner || '');
+          });
+        }
+        const pager = document.getElementById('global-pager-controls');
+        if (pager) {
+          pager.innerHTML = '';
+          const makeBtn = (label, page, disabled=false, active=false) => {
+            const b = document.createElement('a');
+            b.href = '#'; b.textContent = label;
+            b.style.padding = '4px 8px';
+            b.style.border = '1px solid #334155';
+            b.style.borderRadius = '4px';
+            b.style.color = active ? '#000' : '#cbd5e1';
+            b.style.background = active ? '#cbd5e1' : 'transparent';
+            b.style.pointerEvents = disabled ? 'none' : 'auto';
+            b.style.opacity = disabled ? '0.4' : '1';
+            b.addEventListener('click', e => { e.preventDefault(); contactsPage = page; renderContacts(); });
+            pager.appendChild(b);
+          };
+          makeBtn('«', Math.max(1, contactsPage-1), contactsPage<=1);
+          const maxButtons = 9;
+          let start = Math.max(1, contactsPage - Math.floor(maxButtons/2));
+          let end = Math.min(totalPages, start + maxButtons - 1);
+          start = Math.max(1, end - maxButtons + 1);
+          for (let p = start; p <= end; p++) makeBtn(String(p), p, false, p===contactsPage);
+          makeBtn('»', Math.min(totalPages, contactsPage+1), contactsPage>=totalPages);
+        }
+        const infoEl = document.getElementById('pay-footer-info');
+        if (infoEl) {
+          const todayStr = (() => { const d = new Date(); const y=d.getFullYear(); const m=String(d.getMonth()+1).padStart(2,'0'); const dd=String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${dd}`; })();
+          const toTs = x => { const t = Date.parse(x.created || ''); return Number.isFinite(t) ? t : 0; };
+          const listAll = list || [];
+          const totalCount = listAll.length;
+          const todayCount = listAll.filter(x => {
+            const t = toTs(x); if (!t) return false;
+            const d = new Date(t); const y=d.getFullYear(); const m=String(d.getMonth()+1).padStart(2,'0'); const dd=String(d.getDate()).padStart(2,'0');
+            return `${y}-${m}-${dd}` === todayStr;
+          }).length;
+          const latestTs = Math.max(0, ...(listAll.map(toTs)));
+          const latestCount = latestTs ? listAll.filter(x => toTs(x) === latestTs).length : (totalCount ? 1 : 0);
+          const mk = (text) => { const s = document.createElement('span'); s.className = 'info-pill'; s.textContent = text; return s; };
+          infoEl.innerHTML = '';
+          infoEl.appendChild(mk(`共 ${totalCount} 条记录`));
+          infoEl.appendChild(mk(`今日上传 ${todayCount} 条`));
+          infoEl.appendChild(mk(`最后次上传 ${latestCount} 条`));
         }
       }
       confirmCancel?.addEventListener('click', () => {
@@ -1274,12 +2642,14 @@
           document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
           b.classList.add('active');
           contactsTab = b.getAttribute('data-tab');
+          contactsPage = 1;
           renderContacts();
         });
       });
-      contactsSearch?.addEventListener('input', renderContacts);
+      contactsSearch?.addEventListener('input', () => { contactsPage = 1; renderContacts(); });
       const ctForm = document.getElementById('contacts-form');
       const ctSubmitBtn = document.getElementById('contacts-submit');
+      const ctSubmitTop = document.getElementById('contacts-submit-top');
       let editingIndex = null;
       let editingTab = null;
       function fillContactsForm(r) {
@@ -1293,10 +2663,13 @@
         document.getElementById('ct-zip').value = r.zip || '';
         document.getElementById('ct-city').value = r.city || '';
         document.getElementById('ct-remark').value = r.remark || '';
+        const ctSales = document.getElementById('ct-sales'); if (ctSales) ctSales.value = r.sales || '';
       }
       function clearContactsForm() {
         ['ct-name','ct-company','ct-code','ct-contact','ct-phone','ct-country','ct-address','ct-zip','ct-city','ct-remark'].forEach(id => document.getElementById(id).value='');
+        const ctSales = document.getElementById('ct-sales'); if (ctSales) ctSales.value = '';
       }
+      ctSubmitTop?.addEventListener('click', () => { ctForm?.requestSubmit?.(); });
       ctForm?.addEventListener('submit', e => {
         e.preventDefault();
         const name = document.getElementById('ct-name').value.trim();
@@ -1309,6 +2682,7 @@
         const zip = document.getElementById('ct-zip').value.trim();
         const city = document.getElementById('ct-city').value.trim();
         const remark = document.getElementById('ct-remark').value.trim();
+        const sales = (document.getElementById('ct-sales')?.value || '').trim();
         if (!name || !contact || !phone) return;
         if (editingIndex !== null) {
           const target = contactsData[editingTab][editingIndex];
@@ -1322,13 +2696,15 @@
           target.zip = zip;
           target.city = city;
           target.remark = remark;
+          target.sales = sales || '';
           editingIndex = null;
           editingTab = null;
           ctSubmitBtn.textContent = '新增';
+          if (ctSubmitTop) ctSubmitTop.textContent = '新增';
         } else {
           const now = new Date();
           const created = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
-          contactsData[contactsTab].push({ name, contact, phone, city, remark, owner: contactsTab==='customers'?'客户':contactsTab==='merchants'?'商家':'其它', created, company, code, country, address, zip });
+          contactsData[contactsTab].push({ name, contact, phone, city, remark, owner: contactsTab==='customers'?'客户':contactsTab==='merchants'?'商家':'其它', created, company, code, country, address, zip, sales: sales || '' });
         }
         clearContactsForm();
         renderContacts();
@@ -1354,8 +2730,13 @@
           actions.className = 'cat-actions';
           const addBtn = document.createElement('button'); addBtn.className = 'btn-icon btn-green'; addBtn.textContent = '+'; addBtn.title = '新增二级类目';
           const editBtn = document.createElement('button'); editBtn.className = 'btn-icon btn-blue'; editBtn.textContent = '✎'; editBtn.title = '编辑一级类目';
-          const delBtn = document.createElement('button'); delBtn.className = 'btn-icon btn-red'; delBtn.textContent = '🗑'; delBtn.title = '删除一级类目';
-          actions.append(addBtn, editBtn, delBtn);
+          const delBlocked = (cat.name === '收入' || cat.name === '开支');
+          actions.append(addBtn, editBtn);
+          let delBtn = null;
+          if (!delBlocked) {
+            delBtn = document.createElement('button'); delBtn.className = 'btn-icon btn-red'; delBtn.textContent = '🗑'; delBtn.title = '删除一级类目';
+            actions.append(delBtn);
+          }
           header.append(title, actions);
           const items = document.createElement('div');
           items.className = 'cat-items';
@@ -1389,9 +2770,11 @@
             const val = prompt('编辑一级类目名称', cat.name);
             if (val && val.trim()) { categoriesData[idx].name = val.trim(); renderCats(); saveJSON('categoriesData', categoriesData); }
           });
-          delBtn.addEventListener('click', () => {
-            if (confirm('确定删除该一级类目？')) { categoriesData.splice(idx,1); renderCats(); saveJSON('categoriesData', categoriesData); }
-          });
+          if (delBtn) {
+            delBtn.addEventListener('click', () => {
+              if (confirm('确定删除该一级类目？')) { categoriesData.splice(idx,1); renderCats(); saveJSON('categoriesData', categoriesData); }
+            });
+          }
         });
         refreshLedgerTypeOptions();
         setCategories();
@@ -1571,6 +2954,157 @@
         renderUserAccounts();
         saveJSON('userAccounts', userAccounts);
       });
+      const salesRows = document.getElementById('sales-rows');
+      const salesSearch = document.getElementById('sales-search');
+      const salesCreate = document.getElementById('sales-create');
+      const salesModal = document.getElementById('sales-modal');
+      const salesForm = document.getElementById('sales-form');
+      const salesCancel = document.getElementById('sales-cancel');
+      const sName = document.getElementById('s-name');
+      const sRegion = document.getElementById('s-region');
+      const sPhone = document.getElementById('s-phone');
+      const sBase = document.getElementById('s-base');
+      const sRate = document.getElementById('s-rate');
+      const sCommission = document.getElementById('s-commission');
+      const salesData = [];
+      let editingSalesId = null;
+      function renderSales() {
+        const key = (salesSearch?.value || '').trim();
+        const data = salesData.filter(x => {
+          if (!key) return true;
+          return [x.name, x.region, x.phone].some(v => (v||'').includes(key));
+        }).sort((a,b)=>b.id-a.id);
+        if (!salesRows) return;
+        salesRows.innerHTML = '';
+        data.forEach(s => {
+          const tr = document.createElement('tr');
+          const related = payRecords.filter(r => (r.sales || '') === (s.name || ''));
+          const docs = Array.from(new Set(related.map(r => (r.doc || '')).filter(Boolean)));
+          const ordersCount = docs.length;
+          const totalAmount = related.reduce((sum, r) => sum + (r.amount || 0), 0);
+          const arrearsAmount = related.reduce((sum, r) => sum + Math.max(0, (r.amount || 0) - (r.paid || 0)), 0);
+          const cells = [s.id, s.name, s.region || '', s.phone || '', (s.base||0).toFixed(2), (s.rate||0), (s.commission||0).toFixed(2)];
+          cells.forEach(v => { const td = document.createElement('td'); td.textContent = String(v); tr.appendChild(td); });
+          const tdOrders = document.createElement('td');
+          const aOrders = document.createElement('a'); aOrders.href='#'; aOrders.textContent=String(ordersCount); aOrders.className='link-blue';
+          tdOrders.appendChild(aOrders); tr.appendChild(tdOrders);
+          const tdTotal = document.createElement('td'); tdTotal.textContent = totalAmount.toFixed(2); tr.appendChild(tdTotal);
+          const tdArrears = document.createElement('td'); tdArrears.textContent = arrearsAmount.toFixed(2); tdArrears.style.color = '#ef4444'; tr.appendChild(tdArrears);
+          const tdCreated = document.createElement('td'); tdCreated.textContent = s.created || ''; tr.appendChild(tdCreated);
+          const ops = document.createElement('td'); ops.className='actions';
+          const edit = document.createElement('a'); edit.href='#'; edit.textContent='编辑'; edit.className='link-blue';
+          const del = document.createElement('a'); del.href='#'; del.textContent='删除'; del.className='link-red';
+          ops.append(edit, document.createTextNode(' '), del);
+          tr.appendChild(ops);
+          salesRows.appendChild(tr);
+          aOrders.addEventListener('click', e => { e.preventDefault(); openSalesOrders(s.name); });
+          edit.addEventListener('click', e => {
+            e.preventDefault();
+            editingSalesId = s.id;
+            sName.value = s.name || '';
+            sRegion.value = s.region || '';
+            sPhone.value = s.phone || '';
+            sBase.value = s.base != null ? s.base : '';
+            sRate.value = s.rate != null ? s.rate : '';
+            sCommission.value = s.commission != null ? s.commission : '';
+            salesModal.style.display = 'flex';
+          });
+          del.addEventListener('click', e => {
+            e.preventDefault();
+            if (!confirm('确定删除该业务员？')) return;
+            const i = salesData.findIndex(x => x.id === s.id);
+            if (i>=0) { salesData.splice(i,1); renderSales(); saveJSON('salesData', salesData); }
+          });
+          tdArrears.addEventListener('click', e => { e.preventDefault(); openSalesArrears(s.name); });
+        });
+        // 刷新联系人页面的业务员下拉
+        const sel = document.getElementById('ct-sales');
+        if (sel) {
+          const prev = sel.value;
+          sel.innerHTML = '<option value="">请选择业务员</option>';
+          salesData.forEach(s => {
+            const opt = document.createElement('option'); opt.value = s.name; opt.textContent = s.name;
+            sel.appendChild(opt);
+          });
+          if ([...sel.options].some(o => o.value === prev)) sel.value = prev;
+        }
+      }
+      salesCreate?.addEventListener('click', () => {
+        editingSalesId = null;
+        sName.value=''; sRegion.value=''; sPhone.value=''; sBase.value=''; sRate.value=''; sCommission.value='';
+        salesModal.style.display = 'flex';
+      });
+      salesCancel?.addEventListener('click', () => { salesModal.style.display = 'none'; editingSalesId = null; });
+      salesForm?.addEventListener('submit', e => {
+        e.preventDefault();
+        const name = sName.value.trim();
+        const region = sRegion.value.trim();
+        const phone = sPhone.value.trim();
+        const base = parseFloat(sBase.value || '0');
+        const rate = parseFloat(sRate.value || '0');
+        const commission = parseFloat(sCommission.value || '0');
+        if (!name || !phone) return;
+        if (editingSalesId != null) {
+          const s = salesData.find(x => x.id === editingSalesId);
+          if (s) { s.name=name; s.region=region; s.phone=phone; s.base=isNaN(base)?0:base; s.rate=isNaN(rate)?0:rate; s.commission=isNaN(commission)?0:commission; }
+        } else {
+          const maxId = salesData.reduce((m,x)=>Math.max(m,x.id||0),0);
+          const now = new Date();
+          const created = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+          salesData.push({ id:maxId+1, name, region, phone, base:isNaN(base)?0:base, rate:isNaN(rate)?0:rate, commission:isNaN(commission)?0:commission, created });
+        }
+        salesModal.style.display = 'none';
+        editingSalesId = null;
+        renderSales();
+        saveJSON('salesData', salesData);
+      });
+      salesSearch?.addEventListener('input', renderSales);
+      const salesOrdersModal = document.getElementById('sales-orders-modal');
+      const salesOrdersRows = document.getElementById('sales-orders-rows');
+      const salesOrdersHead = document.getElementById('sales-orders-head');
+      const salesOrdersClose = document.getElementById('sales-orders-close');
+      const salesArrearsModal = document.getElementById('sales-arrears-modal');
+      const salesArrearsRows = document.getElementById('sales-arrears-rows');
+      const salesArrearsHead = document.getElementById('sales-arrears-head');
+      const salesArrearsClose = document.getElementById('sales-arrears-close');
+      function openSalesOrders(name) {
+        salesOrdersHead.textContent = '业务员：' + (name || '');
+        const list = payRecords.filter(r => (r.sales || '') === (name || ''));
+        salesOrdersRows.innerHTML = '';
+        list.forEach(r => {
+          const tr = document.createElement('tr');
+          const paid = r.paid || 0;
+          const arrears = Math.max(0, (r.amount || 0) - paid);
+          [r.type, r.partner || '', r.doc || '', (r.amount||0).toFixed(2), paid.toFixed(2), arrears.toFixed(2), r.date || ''].forEach((v,i) => {
+            const td = document.createElement('td');
+            td.textContent = String(v);
+            if (i===5 && arrears>0) td.style.color = '#ef4444';
+            tr.appendChild(td);
+          });
+          salesOrdersRows.appendChild(tr);
+        });
+        salesOrdersModal.style.display = 'flex';
+      }
+      function openSalesArrears(name) {
+        salesArrearsHead.textContent = '业务员：' + (name || '');
+        const list = payRecords.filter(r => (r.sales || '') === (name || '') && Math.max(0,(r.amount||0) - (r.paid||0)) > 0);
+        salesArrearsRows.innerHTML = '';
+        list.forEach(r => {
+          const tr = document.createElement('tr');
+          const paid = r.paid || 0;
+          const remain = Math.max(0, (r.amount || 0) - paid);
+          [r.type, r.partner || '', r.doc || '', (r.amount||0).toFixed(2), paid.toFixed(2), remain.toFixed(2), r.date || ''].forEach((v,i) => {
+            const td = document.createElement('td');
+            td.textContent = String(v);
+            if (i===5) td.style.color = '#ef4444';
+            tr.appendChild(td);
+          });
+          salesArrearsRows.appendChild(tr);
+        });
+        salesArrearsModal.style.display = 'flex';
+      }
+      salesOrdersClose?.addEventListener('click', () => { salesOrdersModal.style.display = 'none'; });
+      salesArrearsClose?.addEventListener('click', () => { salesArrearsModal.style.display = 'none'; });
       const logoutBtn = document.getElementById('logout-btn');
       const authUserTag = document.getElementById('auth-user-tag');
       const loginForm = document.getElementById('login-form');
@@ -1661,6 +3195,7 @@
         const categories = document.getElementById('page-categories');
         const accounts = document.getElementById('page-accounts');
         const userAccounts = document.getElementById('page-user-accounts');
+        const salesAccounts = document.getElementById('page-sales-accounts');
         const roleAccounts = document.getElementById('page-role-accounts');
         const loginPage = document.getElementById('page-login');
         const empty = document.getElementById('page-empty');
@@ -1670,27 +3205,56 @@
           ledger.style.display = 'block';
           payables.style.display = 'none';
           contacts.style.display = 'none';
+          const gp = document.getElementById('global-pager'); if (gp) gp.style.display = 'flex';
           categories.style.display = 'none';
           accounts.style.display = 'none';
+          salesAccounts.style.display = 'none';
           userAccounts.style.display = 'none';
           roleAccounts.style.display = 'none';
           loginPage.style.display = 'none';
           empty.style.display = 'none';
+          try {
+            ledgerHdrType = 'all';
+            ledgerHdrCat = '';
+            ledgerHdrOwner = '';
+            setLabel(document.getElementById('ld-type-label'), '类型', false);
+            setLabel(document.getElementById('ld-cat-label'), '子类目', false);
+            setLabel(document.getElementById('ld-owner-label'), '往来单位', false);
+          } catch {}
+          applyFilters();
         } else if (hash === '#payables') {
           ledger.style.display = 'none';
           payables.style.display = 'block';
           contacts.style.display = 'none';
+          const gp = document.getElementById('global-pager'); if (gp) gp.style.display = 'flex';
           categories.style.display = 'none';
           accounts.style.display = 'none';
+          salesAccounts.style.display = 'none';
           userAccounts.style.display = 'none';
           roleAccounts.style.display = 'none';
           loginPage.style.display = 'none';
           empty.style.display = 'none';
+          try {
+            payFilterType = 'all';
+            payFilterSalesName = '';
+            payFilterStatus = 'all';
+            payFilterOverdue = 'all';
+            payPage = 1;
+            const setDefault = () => {
+              const reset = (el, text) => { if (el) { el.textContent = text + ' ▾'; el.style.color = ''; } };
+              reset(document.getElementById('th-type-label'), '款项类型');
+              reset(document.getElementById('th-sales-label'), '业务员');
+              reset(document.getElementById('th-arrears-label'), '欠款');
+              reset(document.getElementById('th-trust-label'), '信任天数');
+            };
+            setDefault();
+          } catch {}
           renderPayables();
         } else if (hash === '#contacts') {
           ledger.style.display = 'none';
           payables.style.display = 'none';
           contacts.style.display = 'block';
+          const gp = document.getElementById('global-pager'); if (gp) gp.style.display = 'flex';
           categories.style.display = 'none';
           accounts.style.display = 'none';
           userAccounts.style.display = 'none';
@@ -1715,6 +3279,7 @@
           categories.style.display = 'none';
           accounts.style.display = 'block';
           userAccounts.style.display = 'none';
+          salesAccounts.style.display = 'none';
           roleAccounts.style.display = 'none';
           loginPage.style.display = 'none';
           empty.style.display = 'none';
@@ -1725,6 +3290,7 @@
           categories.style.display = 'none';
           accounts.style.display = 'none';
           userAccounts.style.display = 'block';
+          salesAccounts.style.display = 'none';
           roleAccounts.style.display = 'none';
           loginPage.style.display = 'none';
           empty.style.display = 'none';
@@ -1736,10 +3302,23 @@
           categories.style.display = 'none';
           accounts.style.display = 'none';
           userAccounts.style.display = 'none';
+          salesAccounts.style.display = 'none';
           roleAccounts.style.display = 'block';
           loginPage.style.display = 'none';
           empty.style.display = 'none';
           renderRoles();
+        } else if (hash === '#sales-accounts') {
+          ledger.style.display = 'none';
+          payables.style.display = 'none';
+          contacts.style.display = 'none';
+          categories.style.display = 'none';
+          accounts.style.display = 'none';
+          userAccounts.style.display = 'none';
+          salesAccounts.style.display = 'block';
+          roleAccounts.style.display = 'none';
+          loginPage.style.display = 'none';
+          empty.style.display = 'none';
+          renderSales();
         } else if (hash === '#login') {
           ledger.style.display = 'none';
           payables.style.display = 'none';
@@ -1766,7 +3345,8 @@
       initPersist();
       setAuthUI();
       route();
-      render(records);
+      applyFilters();
+      window.addEventListener('resize', updateLedgerHeaderCover);
       renderContacts();
       renderCats();
       refreshAccountOptions();
