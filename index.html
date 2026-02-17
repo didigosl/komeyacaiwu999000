@@ -142,12 +142,12 @@
           <a href="#payables">应收/应付账款</a>
           <a href="#contacts">往来单位</a>
           <a href="#analytics">统计分析</a>
-          <div class="section">系统设置</div>
           <a href="#categories">分类管理</a>
           <a href="#accounts">账户管理</a>
           <a href="#user-accounts">帐号管理</a>
           <a href="#role-accounts">角色管理</a>
           <a href="#sales-accounts">业务员管理</a>
+          <a href="#system">系统设置</a>
         </nav>
         <div id="auth-area" style="padding:12px; border-top:1px solid var(--line); margin-top:auto">
           <div id="auth-user-tag" class="tag" style="display:none; margin-bottom:8px"></div>
@@ -198,9 +198,6 @@
             <div class="field" style="flex:1">
               <span class="label">关键词</span>
               <input id="filter-key" type="text" placeholder="搜索关键词">
-            </div>
-            <div class="field">
-              <button id="ledger-clear" class="btn" type="button">清空记录</button>
             </div>
           </div>
           <div class="row" id="ledger-row" style="display:grid; grid-template-columns:1fr 280px; gap:24px">
@@ -309,6 +306,26 @@
             </div>
           </div>
         </div>
+        <div id="page-system" style="display:none">
+          <div class="card">
+            <div class="bar" style="display:flex; align-items:center; justify-content:space-between">
+              <h3 style="margin:0">系统设置</h3>
+            </div>
+            <div style="padding:16px">
+              <div style="background:#0f172a; border:1px solid #334155; border-radius:12px; padding:16px">
+                <div class="light-top" style="color:#cbd5e1">数据维护</div>
+                <div style="padding:12px; display:flex; align-items:center; gap:12px; color:#e2e8f0">
+                  <button id="system-clear-ledger" class="btn" type="button">清空记账记录</button>
+                  <span class="label" style="color:#fca5a5">仅超级管理员可操作，清空后不可恢复</span>
+                </div>
+              <div style="padding:12px; display:flex; align-items:center; gap:12px; color:#e2e8f0">
+                <button id="system-clear-pay" class="btn" type="button">清空应收/应付记录</button>
+                <span class="label" style="color:#fca5a5">仅超级管理员可操作，清空后不可恢复</span>
+              </div>
+              </div>
+            </div>
+          </div>
+        </div>
       <div id="amount-history-modal" class="modal-overlay" style="display:none">
         <div class="modal">
           <div class="modal-header">
@@ -403,6 +420,66 @@
             </div>
           </div>
         </div>
+        <div id="acc-create-modal" class="modal-overlay" style="display:none">
+          <div class="modal" style="max-width:520px">
+            <div class="modal-header">
+              <div class="modal-title">添加账户</div>
+            </div>
+            <form id="acc-create-form">
+              <div class="modal-body">
+                <div class="group">
+                  <span class="label">账户名称</span>
+                  <input id="acc-create-name" type="text" placeholder="请输入账户名称">
+                </div>
+                <div class="group">
+                  <span class="label">账户说明</span>
+                  <input id="acc-create-desc" type="text" placeholder="可选">
+                </div>
+              </div>
+              <div class="modal-actions">
+                <button type="button" id="acc-create-cancel" class="btn-secondary">取消</button>
+                <button type="submit" class="btn">保存</button>
+              </div>
+            </form>
+          </div>
+        </div>
+        <div id="acc-delete-modal" class="modal-overlay" style="display:none">
+          <div class="modal">
+            <div class="modal-header">
+              <div class="modal-title">确认删除</div>
+            </div>
+            <div class="modal-body">
+              <div>确定删除该账户？此操作不可撤销</div>
+            </div>
+            <div class="modal-actions">
+              <button type="button" id="acc-delete-cancel" class="btn-secondary">取消</button>
+              <button type="button" id="acc-delete-ok" class="btn">确认删除</button>
+            </div>
+          </div>
+        </div>
+        <div id="acc-edit-modal" class="modal-overlay" style="display:none">
+          <div class="modal" style="max-width:520px">
+            <div class="modal-header">
+              <div class="modal-title">编辑账户</div>
+            </div>
+            <form id="acc-edit-form">
+              <div class="modal-body">
+                <div class="group">
+                  <span class="label">账户名称</span>
+                  <input id="acc-edit-name" type="text" placeholder="请输入账户名称">
+                </div>
+                <div class="group">
+                  <span class="label">账户说明</span>
+                  <input id="acc-edit-desc" type="text" placeholder="可选">
+                </div>
+              </div>
+              <div class="modal-actions">
+                <button type="button" id="acc-edit-cancel" class="btn-secondary">取消</button>
+                <button type="submit" class="btn">保存</button>
+              </div>
+            </form>
+          </div>
+        </div>
         <div id="page-payables" style="display:none">
           <div class="row" id="payables-row" style="display:grid; grid-template-columns:1fr 280px; gap:24px">
             <div class="card">
@@ -417,7 +494,6 @@
                   <span style="display:inline-block; width:14px; height:14px; background:#22c55e; border-radius:3px"></span>
                   导出Excel
                 </button>
-                <button id="pay-clear" class="btn-secondary" style="margin-left:8px">清空记录</button>
               </div>
               <div class="table-wrap" id="pay-table-wrap" style="height:calc(100vh - 220px); overflow:auto; position:relative; background:#0f172a; padding:0 16px 16px 16px">
                 <table style="border-collapse:collapse; border-spacing:0; width:100%">
@@ -462,6 +538,7 @@
                   </tbody>
                 </table>
               </div>
+          <div id="pay-pager" style="display:flex; gap:8px; align-items:center; justify-content:center; padding:12px 0"></div>
             </div>
             <div class="card">
               <form class="form" id="pay-form">
@@ -908,6 +985,32 @@
             </div>
           </div>
         </div>
+        <div id="change-pwd-modal" class="modal-overlay" style="display:none">
+          <div class="modal" style="max-width:520px">
+            <div class="modal-header">
+              <div class="modal-title">修改密码</div>
+            </div>
+            <div class="modal-body">
+              <div style="margin-bottom:8px">当前用户：<span id="cp-user"></span></div>
+              <div class="group">
+                <span class="label">当前密码</span>
+                <input id="cp-old" type="password" placeholder="请输入当前密码">
+              </div>
+              <div class="group">
+                <span class="label">新密码</span>
+                <input id="cp-new1" type="password" placeholder="请输入新密码">
+              </div>
+              <div class="group">
+                <span class="label">再次输入新密码</span>
+                <input id="cp-new2" type="password" placeholder="请再次输入新密码">
+              </div>
+            </div>
+            <div class="modal-actions">
+              <button type="button" id="cp-cancel" class="btn-secondary">取消</button>
+              <button type="button" id="cp-ok" class="btn">确认修改</button>
+            </div>
+          </div>
+        </div>
         <div id="role-modal" class="modal-overlay" style="display:none">
           <div class="modal">
             <div class="modal-header">
@@ -923,6 +1026,22 @@
               <div class="modal-actions">
                 <button type="button" id="role-cancel" class="btn-secondary">取消</button>
                 <button type="submit" class="btn">保存</button>
+              </div>
+            </form>
+          </div>
+        </div>
+        <div id="role-perms-modal" class="modal-overlay" style="display:none">
+          <div class="modal" style="max-width:900px">
+            <div class="modal-header">
+              <div class="modal-title">角色权限设置</div>
+            </div>
+            <form id="role-perms-form">
+              <div class="modal-body">
+                <div id="perms-wrap" style="display:grid; grid-template-columns:repeat(2,1fr); gap:12px"></div>
+              </div>
+              <div class="modal-actions">
+                <button type="button" id="role-perms-cancel" class="btn-secondary">取消</button>
+                <button type="submit" class="btn">保存权限</button>
               </div>
             </form>
           </div>
@@ -971,7 +1090,7 @@
       const filterKey = document.getElementById('filter-key');
       const filterStart = document.getElementById('filter-start');
       const filterEnd = document.getElementById('filter-end');
-      const ledgerPager = document.getElementById('global-pager-controls') || document.getElementById('ledger-pager');
+      const ledgerPager = document.getElementById('ledger-pager') || document.getElementById('global-pager-controls');
       const ledgerTableWrap = document.getElementById('ledger-table-wrap');
       const ldType = document.getElementById('ld-type');
       const ldTypeDD = document.getElementById('ld-type-dd');
@@ -1108,6 +1227,18 @@
         if (Array.isArray(cats)) { categoriesData.splice(0, categoriesData.length, ...cats); }
         const roles = loadJSON('rolesData', null);
         if (Array.isArray(roles)) { rolesData.splice(0, rolesData.length, ...roles); }
+        const ensureRole = (name, desc) => {
+          if (!rolesData.some(r => r.name === name)) {
+            const maxId = rolesData.reduce((m,r)=>Math.max(m, r.id||0), 0);
+            const now = new Date();
+            const created = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+            rolesData.push({ id:maxId+1, name, desc, created, immutable:true });
+          }
+        };
+        ensureRole('财务','系统预置角色');
+        ensureRole('股东','系统预置角色');
+        ensureRole('后台管理人员','系统预置角色');
+        saveJSON('rolesData', rolesData);
         const users = loadJSON('userAccounts', null);
         if (Array.isArray(users)) { userAccounts.splice(0, userAccounts.length, ...users); }
         const sales = loadJSON('salesData', null);
@@ -1146,25 +1277,17 @@
           accRows.appendChild(tr);
           edit.addEventListener('click', e => {
             e.preventDefault();
-            const newName = prompt('账户名称', a.name) || a.name;
-            const newDesc = prompt('账户说明', a.desc || '') ?? a.desc;
-            const oldName = a.name;
-            a.name = newName.trim() || a.name;
-            a.desc = (newDesc || '').trim();
-            records.forEach(r => { if (r.method === oldName) r.method = a.name; });
-            refreshAccountOptions();
-            renderAccounts();
-            saveJSON('accountsData', accountsData);
-            saveJSON('records', records);
+            pendingAccEditIndex = idx;
+            accEditName.value = a.name || '';
+            accEditDesc.value = a.desc || '';
+            accEditModal.style.display = 'flex';
           });
           del.addEventListener('click', e => {
             e.preventDefault();
             const used = records.some(r => r.method === a.name);
-            if (used) { alert('该账户已被记录使用，无法删除'); return; }
-            accountsData.splice(idx,1);
-            refreshAccountOptions();
-            renderAccounts();
-            saveJSON('accountsData', accountsData);
+            if (used) { alert('该账户有相关信息正在使用中无法被删除'); return; }
+            pendingAccDeleteIndex = idx;
+            accDeleteModal.style.display = 'flex';
           });
         });
       }
@@ -1173,6 +1296,21 @@
       const accInitCancel = document.getElementById('acc-init-cancel');
       const accInitOk = document.getElementById('acc-init-ok');
       let pendingAccInitIndex = null;
+      const accCreateModal = document.getElementById('acc-create-modal');
+      const accCreateForm = document.getElementById('acc-create-form');
+      const accCreateCancel = document.getElementById('acc-create-cancel');
+      const accCreateName = document.getElementById('acc-create-name');
+      const accCreateDesc = document.getElementById('acc-create-desc');
+      const accDeleteModal = document.getElementById('acc-delete-modal');
+      const accDeleteCancel = document.getElementById('acc-delete-cancel');
+      const accDeleteOk = document.getElementById('acc-delete-ok');
+      let pendingAccDeleteIndex = null;
+      const accEditModal = document.getElementById('acc-edit-modal');
+      const accEditForm = document.getElementById('acc-edit-form');
+      const accEditCancel = document.getElementById('acc-edit-cancel');
+      const accEditName = document.getElementById('acc-edit-name');
+      const accEditDesc = document.getElementById('acc-edit-desc');
+      let pendingAccEditIndex = null;
       accInitCancel?.addEventListener('click', () => {
         accInitModal.style.display = 'none';
         pendingAccInitIndex = null;
@@ -1188,6 +1326,59 @@
           renderAccounts();
           saveJSON('accountsData', accountsData);
         }
+      });
+      accCreateCancel?.addEventListener('click', () => {
+        accCreateModal.style.display = 'none';
+      });
+      accCreateForm?.addEventListener('submit', e => {
+        e.preventDefault();
+        const name = (accCreateName?.value || '').trim();
+        const desc = (accCreateDesc?.value || '').trim();
+        if (!name) return;
+        if (accountsData.some(a => a.name === name)) { alert('账户名称已存在'); return; }
+        const now = new Date();
+        const created = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+        accountsData.push({ name, balance:0, desc, created, initialSet:false });
+        accCreateModal.style.display = 'none';
+        refreshAccountOptions();
+        renderAccounts();
+        saveJSON('accountsData', accountsData);
+      });
+      accEditCancel?.addEventListener('click', () => {
+        accEditModal.style.display = 'none';
+        pendingAccEditIndex = null;
+      });
+      accEditForm?.addEventListener('submit', e => {
+        e.preventDefault();
+        if (pendingAccEditIndex == null) return;
+        const name = (accEditName?.value || '').trim();
+        const desc = (accEditDesc?.value || '').trim();
+        if (!name) return;
+        const oldName = accountsData[pendingAccEditIndex].name;
+        if (name !== oldName && accountsData.some((x, i) => x.name === name && i !== pendingAccEditIndex)) { alert('账户名称已存在'); return; }
+        accountsData[pendingAccEditIndex].name = name;
+        accountsData[pendingAccEditIndex].desc = desc;
+        records.forEach(r => { if (r.method === oldName) r.method = name; });
+        accEditModal.style.display = 'none';
+        pendingAccEditIndex = null;
+        refreshAccountOptions();
+        renderAccounts();
+        saveJSON('accountsData', accountsData);
+        saveJSON('records', records);
+      });
+      accDeleteCancel?.addEventListener('click', () => {
+        accDeleteModal.style.display = 'none';
+        pendingAccDeleteIndex = null;
+      });
+      accDeleteOk?.addEventListener('click', () => {
+        if (pendingAccDeleteIndex != null) {
+          accountsData.splice(pendingAccDeleteIndex,1);
+          refreshAccountOptions();
+          renderAccounts();
+          saveJSON('accountsData', accountsData);
+        }
+        accDeleteModal.style.display = 'none';
+        pendingAccDeleteIndex = null;
       });
       const clientDD = document.getElementById('client-dd');
       const clientSearch = document.getElementById('client-search');
@@ -1437,6 +1628,7 @@
         updateLedgerHeaderCover();
         if (ledgerPager) {
           ledgerPager.innerHTML = '';
+          ledgerPager.style.display = 'flex';
           const makeBtn = (label, page, disabled=false, active=false) => {
             const b = document.createElement('a');
             b.href = '#'; b.textContent = label;
@@ -1481,15 +1673,29 @@
       filterType.addEventListener('change', () => { ledgerPage = 1; applyFilters(); });
       filterStart.addEventListener('change', () => { ledgerPage = 1; applyFilters(); });
       filterEnd.addEventListener('change', () => { ledgerPage = 1; applyFilters(); });
-      document.getElementById('ledger-clear')?.addEventListener('click', () => {
+      document.getElementById('system-clear-ledger')?.addEventListener('click', () => {
         if (!confirm('确认清空收支记账的所有数据？此操作不可撤销。')) return;
         records.splice(0, records.length);
         saveJSON('records', records);
         applyFilters();
         rows.innerHTML = '<tr class="empty"><td colspan="10">暂无流水记录</td></tr>';
       });
+      document.getElementById('system-clear-pay')?.addEventListener('click', () => {
+        if (!payRecords.length) { alert('当前无记录'); return; }
+        if (!confirm('确定清空应收/应付所有记录？此操作不可恢复')) return;
+        payRecords.splice(0, payRecords.length);
+        saveJSON('payRecords', payRecords);
+        payPage = 1;
+        renderPayables();
+      });
       document.getElementById('entry-form').addEventListener('submit', e => {
         e.preventDefault();
+        const u = getAuthUser(); const roleName = u?.role || '';
+        if (roleName !== '超级管理员') {
+          const role = rolesData.find(r => r.name === roleName);
+          const allowed = !!(role && role.perms && role.perms.ledger && role.perms.ledger.create);
+          if (!allowed) { alert('当前角色无“收支记账新增”权限'); return; }
+        }
         const type = entryType.value;
         const category = entryCategory.value;
         const doc = (document.getElementById('entry-doc')?.value || '').trim();
@@ -1573,7 +1779,7 @@
       const payExportBtn = document.getElementById('pay-export');
       const payClearBtn = document.getElementById('pay-clear');
       let payLastPageData = [];
-      const payPager = document.getElementById('global-pager-controls') || document.getElementById('pay-pager');
+      const payPager = document.getElementById('pay-pager') || document.getElementById('global-pager-controls');
       const payFooterInfo = document.getElementById('pay-footer-info');
       const payTableWrap = document.getElementById('pay-table-wrap');
       const thType = document.getElementById('th-type');
@@ -1940,6 +2146,7 @@
         if (payTableWrap) payTableWrap.scrollTop = 0;
         if (payPager) {
           payPager.innerHTML = '';
+          payPager.style.display = 'flex';
           const makeBtn = (label, page, disabled=false, active=false) => {
             const b = document.createElement('a');
             b.href = '#'; b.textContent = label;
@@ -2519,7 +2726,7 @@
         if (contactsPage > totalPages) contactsPage = totalPages;
         const startIdx = (contactsPage - 1) * contactsPageSize;
         const data = filtered.slice(startIdx, startIdx + contactsPageSize);
-        const gp = document.getElementById('global-pager'); if (gp) gp.style.display = 'flex';
+        const gp = document.getElementById('global-pager'); if (gp) gp.style.display = (document.getElementById('page-contacts')?.style.display === 'block') ? 'flex' : 'none';
         // 同步业务员下拉
         const sel = document.getElementById('ct-sales');
         if (sel) {
@@ -2797,8 +3004,88 @@
       const roleForm = document.getElementById('role-form');
       const roleCancel = document.getElementById('role-cancel');
       const rolesData = [
-        { id:1, name:'超级管理员', desc:'超级管理员不可删除，不可修改', created:'2022-01-29 07:40:15', immutable:true }
+        { id:1, name:'超级管理员', desc:'超级管理员不可删除，不可修改', created:'2022-01-29 07:40:15', immutable:true },
+        { id:2, name:'财务', desc:'系统预置角色', created:'2026-02-18 00:00:00', immutable:true },
+        { id:3, name:'股东', desc:'系统预置角色', created:'2026-02-18 00:00:00', immutable:true },
+        { id:4, name:'后台管理人员', desc:'系统预置角色', created:'2026-02-18 00:00:00', immutable:true }
       ];
+      const permSchema = {
+        home: { label:'首页', actions:{ view:'进入' } },
+        ledger: { label:'收支记账', actions:{ view:'进入', create:'新增', edit:'编辑', delete:'删除', export:'导出' } },
+        payables: { label:'应收/应付账款', actions:{ view:'进入', create:'新增', edit:'编辑', delete:'删除', import:'批量导入', export:'导出' } },
+        contacts: { label:'往来单位', actions:{ view:'进入', create:'新增', edit:'编辑', delete:'删除' } },
+        analytics: { label:'统计分析', actions:{ view:'进入' } },
+        categories: { label:'分类管理', actions:{ view:'进入', manage:'维护类目' } },
+        accounts: { label:'账户管理', actions:{ view:'进入', create_account:'新增账户', edit_account:'编辑账户', delete_account:'删除账户', init_account:'初始金额' } },
+        user_accounts: { label:'帐号管理', actions:{ view:'进入', create_user:'创建账号', reset_password:'重置密码', enable_user:'启用/停用' } },
+        role_accounts: { label:'角色管理', actions:{ view:'进入', create_role:'创建角色', edit_role:'编辑角色', delete_role:'删除角色' } },
+        sales_accounts: { label:'业务员管理', actions:{ view:'进入', create_sales:'新增', edit_sales:'编辑', delete_sales:'删除' } }
+      };
+      function allTruePerms() {
+        const p = {}; Object.keys(permSchema).forEach(m => { p[m]={}; Object.keys(permSchema[m].actions).forEach(a => p[m][a]=true); }); return p;
+      }
+      function getRoleByName(name) { return rolesData.find(r => r.name === name); }
+      function currentUserRole() {
+        const u = getAuthUser();
+        if (!u) return null;
+        const roleName = u.role || (u.name==='aaaaaa'?'超级管理员':'');
+        return getRoleByName(roleName) || null;
+      }
+      function currentPerms() {
+        const r = currentUserRole();
+        if (!r || r.name==='超级管理员') return allTruePerms();
+        return r.perms || {};
+      }
+      function can(module, action) {
+        const u = getAuthUser();
+        const roleName = (u?.role) || getUserRoleName(u?.name || '');
+        if (roleName === '超级管理员') return true;
+        const role = rolesData.find(r => r.name === roleName);
+        const perms = role?.perms || {};
+        const m = perms[module] || {};
+        return action ? !!m[action] : !!m.view;
+      }
+      const rolePermsModal = document.getElementById('role-perms-modal');
+      const rolePermsForm = document.getElementById('role-perms-form');
+      const rolePermsCancel = document.getElementById('role-perms-cancel');
+      const permsWrap = document.getElementById('perms-wrap');
+      let editingPermRole = null;
+      function openPermsEditor(role) {
+        editingPermRole = role;
+        permsWrap.innerHTML = '';
+        const perms = role.perms || {};
+        Object.keys(permSchema).forEach(mod => {
+          const box = document.createElement('div'); box.className='panel-light';
+          const top = document.createElement('div'); top.className='light-top'; top.textContent = permSchema[mod].label;
+          const cont = document.createElement('div'); cont.style.padding='8px';
+          Object.entries(permSchema[mod].actions).forEach(([act,label]) => {
+            const row = document.createElement('label'); row.style.display='block'; row.style.margin='6px 0'; row.style.cursor='pointer';
+            const cb = document.createElement('input'); cb.type='checkbox'; cb.dataset.mod=mod; cb.dataset.act=act; cb.checked = !!(perms[mod] && perms[mod][act]);
+            cb.style.marginRight='8px';
+            row.append(cb, document.createTextNode(label));
+            cont.appendChild(row);
+          });
+          box.append(top, cont);
+          permsWrap.appendChild(box);
+        });
+        rolePermsModal.style.display='flex';
+      }
+      rolePermsCancel?.addEventListener('click', () => { rolePermsModal.style.display='none'; editingPermRole=null; });
+      rolePermsForm?.addEventListener('submit', e => {
+        e.preventDefault();
+        if (!editingPermRole) return;
+        const newPerms = {};
+        Object.keys(permSchema).forEach(m => { newPerms[m] = {}; });
+        permsWrap.querySelectorAll('input[type=checkbox]').forEach(cb => {
+          const mod = cb.dataset.mod; const act = cb.dataset.act;
+          if (cb.checked) newPerms[mod][act] = true;
+        });
+        editingPermRole.perms = newPerms;
+        rolePermsModal.style.display='none';
+        editingPermRole = null;
+        renderRoles();
+        saveJSON('rolesData', rolesData);
+      });
       let rolePage = 1;
       function renderRoles() {
         const key = (roleSearch?.value || '').trim();
@@ -2817,27 +3104,25 @@
           const tr = document.createElement('tr');
           [r.id, r.name, r.desc, r.created].forEach(v => { const td = document.createElement('td'); td.textContent = v; tr.appendChild(td); });
           const ops = document.createElement('td'); ops.className='actions';
-          if (r.immutable) {
-            const tip = document.createElement('span'); tip.className='tag'; tip.textContent='不可编辑/删除';
-            ops.appendChild(tip);
-          } else {
+          if (r.id !== 1) {
             const edit = document.createElement('a'); edit.href='#'; edit.textContent='编辑'; edit.className='link-blue';
+            ops.append(edit);
+            edit.addEventListener('click', e => { e.preventDefault(); openPermsEditor(r); });
+          } else {
+            const tip = document.createElement('span'); tip.className='tag'; tip.textContent='不可编辑/删除';
+            ops.append(tip);
+          }
+          if (!r.immutable) {
             const del = document.createElement('a'); del.href='#'; del.textContent='删除'; del.className='link-red';
-            ops.append(edit, document.createTextNode(' '), del);
-            edit.addEventListener('click', e => {
-              e.preventDefault();
-              const newName = prompt('角色名称', r.name) || r.name;
-              const newDesc = prompt('角色描述', r.desc || '') ?? r.desc;
-              r.name = newName.trim() || r.name;
-              r.desc = (newDesc || '').trim();
-              renderRoles();
-            saveJSON('rolesData', rolesData);
-            });
+            ops.append(document.createTextNode(' '), del);
             del.addEventListener('click', e => {
               e.preventDefault();
               const i = rolesData.indexOf(r);
-            if (i>=0) { rolesData.splice(i,1); renderRoles(); saveJSON('rolesData', rolesData); }
+              if (i>=0) { rolesData.splice(i,1); renderRoles(); saveJSON('rolesData', rolesData); }
             });
+          } else {
+            const tip2 = document.createElement('span'); tip2.className='tag'; tip2.textContent='不可删除';
+            ops.append(document.createTextNode(' '), tip2);
           }
           tr.appendChild(ops);
           roleRows.appendChild(tr);
@@ -2910,8 +3195,29 @@
         userRows.innerHTML = '';
         pageData.forEach(u => {
           const tr = document.createElement('tr');
-          const cells = [u.id, u.name, u.role, u.created];
-          cells.forEach(v => { const td = document.createElement('td'); td.textContent = v; tr.appendChild(td); });
+          const tdId = document.createElement('td'); tdId.textContent = String(u.id); tr.appendChild(tdId);
+          const tdName = document.createElement('td'); tdName.textContent = u.name; tr.appendChild(tdName);
+          const tdRole = document.createElement('td');
+          if (u.name === 'aaaaaa') {
+            tdRole.textContent = '超级管理员';
+          } else {
+            const sel = document.createElement('select');
+            rolesData.forEach(r => {
+              const opt = document.createElement('option'); opt.value = r.name; opt.textContent = r.name;
+              sel.appendChild(opt);
+            });
+            sel.value = u.role || '';
+            sel.addEventListener('change', () => {
+              u.role = sel.value || '';
+              saveJSON('userAccounts', userAccounts);
+              const au = getAuthUser();
+              if (au && au.name === u.name) setAuthUser({ ...au, role: u.role });
+              renderUserAccounts();
+            });
+            tdRole.appendChild(sel);
+          }
+          tr.appendChild(tdRole);
+          const tdCreated = document.createElement('td'); tdCreated.textContent = u.created || ''; tr.appendChild(tdCreated);
           const tdStatus = document.createElement('td');
           const sw = document.createElement('div'); sw.className = 'switch' + (u.enabled ? '' : ' off');
           const btn = document.createElement('button'); btn.textContent = u.enabled ? 'ON' : 'OFF';
@@ -3132,6 +3438,12 @@
         else localStorage.removeItem('authUser');
         setAuthUI();
       }
+      function getUserRoleName(name) {
+        if (name==='aaaaaa') return '超级管理员';
+        const users = loadJSON('userAccounts', []);
+        const u = (Array.isArray(users) ? users : []).find(x => x.name === name);
+        return u ? (u.role || '') : '';
+      }
       function getPwdMap() {
         try { return JSON.parse(localStorage.getItem('userPasswords') || '{}'); } catch { return {}; }
       }
@@ -3148,6 +3460,18 @@
       let pendingResetUser = null;
       logoutBtn?.addEventListener('click', () => {
         logoutModal.style.display = 'flex';
+      });
+      authUserTag?.addEventListener('click', () => {
+        const u = getAuthUser();
+        const cpUser = document.getElementById('cp-user');
+        const oldEl = document.getElementById('cp-old');
+        const n1 = document.getElementById('cp-new1');
+        const n2 = document.getElementById('cp-new2');
+        if (cpUser) cpUser.textContent = u?.name || '';
+        if (oldEl) oldEl.value = '';
+        if (n1) n1.value = '';
+        if (n2) n2.value = '';
+        document.getElementById('change-pwd-modal').style.display = 'flex';
       });
       logoutCancel?.addEventListener('click', () => {
         logoutModal.style.display = 'none';
@@ -3173,6 +3497,30 @@
         resetModal.style.display = 'none';
         pendingResetUser = null;
       });
+      const cpCancel = document.getElementById('cp-cancel');
+      const cpOk = document.getElementById('cp-ok');
+      cpCancel?.addEventListener('click', () => {
+        document.getElementById('change-pwd-modal').style.display = 'none';
+      });
+      cpOk?.addEventListener('click', () => {
+        const u = getAuthUser();
+        const name = u?.name || '';
+        const old = document.getElementById('cp-old').value || '';
+        const n1 = document.getElementById('cp-new1').value || '';
+        const n2 = document.getElementById('cp-new2').value || '';
+        if (!name || !old || !n1 || !n2) return;
+        if (n1 !== n2) { alert('两次输入的新密码不一致'); return; }
+        const m = getPwdMap();
+        const current = m[name] || (userAccounts.find(x => x.name === name)?.password || '');
+        if (String(current) !== String(old)) { alert('当前密码不正确'); return; }
+        m[name] = n1;
+        setPwdMap(m);
+        const idx = userAccounts.findIndex(x => x.name === name);
+        if (idx >= 0) userAccounts[idx].password = n1;
+        saveJSON('userAccounts', userAccounts);
+        document.getElementById('change-pwd-modal').style.display = 'none';
+        alert('修改密码成功');
+      });
       loginForm?.addEventListener('submit', e => {
         e.preventDefault();
         const name = (loginUser.value || '').trim();
@@ -3185,12 +3533,29 @@
         }
         if (!ok) { loginMsg.style.display = 'inline-block'; return; }
         loginMsg.style.display = 'none';
-        setAuthUser({ name });
+        setAuthUser({ name, role: getUserRoleName(name) });
         location.hash = '#ledger';
       });
       function route() {
         const hash = location.hash || '#ledger';
+        const au = getAuthUser(); if (au && !au.role) { setAuthUser({ ...au, role: getUserRoleName(au.name) }); }
         document.querySelectorAll('.nav a').forEach(a => a.classList.toggle('active', a.getAttribute('href') === hash));
+        // 导航可见性基于角色权限
+        (function applyNavPerms(){
+          const u = getAuthUser();
+          const roleName = (u?.role) || getUserRoleName(u?.name || '');
+          const role = roleName ? rolesData.find(r => r.name === roleName) : null;
+          const perms = (roleName==='超级管理员') ? allTruePerms() : (role?.perms || {});
+          const map = {
+            '#home':'home', '#ledger':'ledger', '#payables':'payables', '#contacts':'contacts', '#analytics':'analytics',
+            '#system':'system', '#categories':'categories', '#accounts':'accounts', '#user-accounts':'user_accounts', '#role-accounts':'role_accounts', '#sales-accounts':'sales_accounts'
+          };
+          document.querySelectorAll('.nav a').forEach(a => {
+            const m = map[a.getAttribute('href') || ''];
+            const allow = (roleName==='超级管理员') ? true : (m==='home' ? true : (m==='system' ? false : !!(perms[m] && perms[m].view)));
+            a.style.display = allow ? 'block' : 'none';
+          });
+        })();
         const ledger = document.getElementById('page-ledger');
         const payables = document.getElementById('page-payables');
         const contacts = document.getElementById('page-contacts');
@@ -3199,15 +3564,27 @@
         const userAccounts = document.getElementById('page-user-accounts');
         const salesAccounts = document.getElementById('page-sales-accounts');
         const roleAccounts = document.getElementById('page-role-accounts');
+        const systemPage = document.getElementById('page-system');
         const loginPage = document.getElementById('page-login');
         const empty = document.getElementById('page-empty');
         const authed = !!getAuthUser();
         if (!authed) { location.href = './login.html'; return; }
+        if (systemPage) systemPage.style.display = 'none';
+        function ensureView(module) {
+          const u = getAuthUser(); const roleName = u?.role || '';
+          const nameWithFallback = roleName || getUserRoleName(u?.name || '');
+          if (nameWithFallback==='超级管理员' || module==='home') return true;
+          const role = rolesData.find(r => r.name === nameWithFallback);
+          const allow = !!(role && role.perms && role.perms[module] && role.perms[module].view);
+          if (!allow) { location.hash = '#home'; return false; }
+          return true;
+        }
         if (hash === '#ledger') {
+          if (!ensureView('ledger')) return;
           ledger.style.display = 'block';
           payables.style.display = 'none';
           contacts.style.display = 'none';
-          const gp = document.getElementById('global-pager'); if (gp) gp.style.display = 'flex';
+          const gp = document.getElementById('global-pager'); if (gp) gp.style.display = 'none';
           categories.style.display = 'none';
           accounts.style.display = 'none';
           salesAccounts.style.display = 'none';
@@ -3225,10 +3602,12 @@
           } catch {}
           applyFilters();
         } else if (hash === '#payables') {
+          if (!ensureView('payables')) return;
           ledger.style.display = 'none';
           payables.style.display = 'block';
           contacts.style.display = 'none';
-          const gp = document.getElementById('global-pager'); if (gp) gp.style.display = 'flex';
+          const gp = document.getElementById('global-pager'); if (gp) gp.style.display = 'none';
+          const uw = document.getElementById('undo-wrap'); if (uw) uw.style.display = 'none';
           categories.style.display = 'none';
           accounts.style.display = 'none';
           salesAccounts.style.display = 'none';
@@ -3253,10 +3632,12 @@
           } catch {}
           renderPayables();
         } else if (hash === '#contacts') {
+          if (!ensureView('contacts')) return;
           ledger.style.display = 'none';
           payables.style.display = 'none';
           contacts.style.display = 'block';
           const gp = document.getElementById('global-pager'); if (gp) gp.style.display = 'flex';
+          const uw = document.getElementById('undo-wrap'); if (uw) uw.style.display = 'none';
           categories.style.display = 'none';
           accounts.style.display = 'none';
           userAccounts.style.display = 'none';
@@ -3265,39 +3646,47 @@
           empty.style.display = 'none';
           renderContacts();
         } else if (hash === '#categories') {
+          if (!ensureView('categories')) return;
           ledger.style.display = 'none';
           payables.style.display = 'none';
           contacts.style.display = 'none';
           categories.style.display = 'block';
+          const uw = document.getElementById('undo-wrap'); if (uw) uw.style.display = 'none';
           accounts.style.display = 'none';
           userAccounts.style.display = 'none';
           roleAccounts.style.display = 'none';
           loginPage.style.display = 'none';
           empty.style.display = 'none';
         } else if (hash === '#accounts') {
+          if (!ensureView('accounts')) return;
           ledger.style.display = 'none';
           payables.style.display = 'none';
           contacts.style.display = 'none';
           categories.style.display = 'none';
           accounts.style.display = 'block';
+          const uw = document.getElementById('undo-wrap'); if (uw) uw.style.display = 'none';
           userAccounts.style.display = 'none';
           salesAccounts.style.display = 'none';
           roleAccounts.style.display = 'none';
           loginPage.style.display = 'none';
           empty.style.display = 'none';
+          const gp = document.getElementById('global-pager'); if (gp) gp.style.display = 'none';
         } else if (hash === '#user-accounts') {
+          if (!ensureView('user_accounts')) return;
           ledger.style.display = 'none';
           payables.style.display = 'none';
           contacts.style.display = 'none';
           categories.style.display = 'none';
           accounts.style.display = 'none';
           userAccounts.style.display = 'block';
+          const uw = document.getElementById('undo-wrap'); if (uw) uw.style.display = 'none';
           salesAccounts.style.display = 'none';
           roleAccounts.style.display = 'none';
           loginPage.style.display = 'none';
           empty.style.display = 'none';
           renderUserAccounts();
         } else if (hash === '#role-accounts') {
+          if (!ensureView('role_accounts')) return;
           ledger.style.display = 'none';
           payables.style.display = 'none';
           contacts.style.display = 'none';
@@ -3306,10 +3695,12 @@
           userAccounts.style.display = 'none';
           salesAccounts.style.display = 'none';
           roleAccounts.style.display = 'block';
+          const uw = document.getElementById('undo-wrap'); if (uw) uw.style.display = 'none';
           loginPage.style.display = 'none';
           empty.style.display = 'none';
           renderRoles();
         } else if (hash === '#sales-accounts') {
+          if (!ensureView('sales_accounts')) return;
           ledger.style.display = 'none';
           payables.style.display = 'none';
           contacts.style.display = 'none';
@@ -3318,9 +3709,24 @@
           userAccounts.style.display = 'none';
           salesAccounts.style.display = 'block';
           roleAccounts.style.display = 'none';
+          const uw = document.getElementById('undo-wrap'); if (uw) uw.style.display = 'none';
           loginPage.style.display = 'none';
           empty.style.display = 'none';
           renderSales();
+        } else if (hash === '#system') {
+          const u = getAuthUser(); const rn = (u?.role) || getUserRoleName(u?.name || '');
+          if (rn !== '超级管理员') { location.hash = '#home'; return; }
+          ledger.style.display = 'none';
+          payables.style.display = 'none';
+          contacts.style.display = 'none';
+          categories.style.display = 'none';
+          accounts.style.display = 'none';
+          userAccounts.style.display = 'none';
+          salesAccounts.style.display = 'none';
+          roleAccounts.style.display = 'none';
+          systemPage.style.display = 'block';
+          loginPage.style.display = 'none';
+          empty.style.display = 'none';
         } else if (hash === '#login') {
           ledger.style.display = 'none';
           payables.style.display = 'none';
@@ -3357,15 +3763,18 @@
       setCategories();
       renderPayables();
       accAdd?.addEventListener('click', () => {
-        const name = prompt('账户名称');
-        if (!name || !name.trim()) return;
-        const desc = prompt('账户说明') || '';
-        const now = new Date();
-        const created = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
-        accountsData.push({ name: name.trim(), balance:0, desc: desc.trim(), created, initialSet:false });
-        refreshAccountOptions();
-        renderAccounts();
-        saveJSON('accountsData', accountsData);
+        const u = getAuthUser(); const roleName = u?.role || '';
+        if (roleName !== '超级管理员') {
+          const role = rolesData.find(r => r.name === roleName);
+          const allowed = !!(role && role.perms && role.perms.accounts && role.perms.accounts.create_account);
+          if (!allowed) { alert('当前角色无“新增账户”权限'); return; }
+        }
+        const nameEl = document.getElementById('acc-create-name');
+        const descEl = document.getElementById('acc-create-desc');
+        const modal = document.getElementById('acc-create-modal');
+        if (nameEl) nameEl.value = '';
+        if (descEl) descEl.value = '';
+        if (modal) modal.style.display = 'flex';
       });
     </script>
   </body>
