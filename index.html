@@ -70,6 +70,9 @@
       .preview-table tbody tr:nth-child(even) td { background:#f9fbff; }
       .preview-table tbody tr:hover td { background:#f2f6ff; }
       .error-cell { background:#fee2e2 !important; color:#7f1d1d !important; }
+      .invalid { border-color: var(--red) !important; color: var(--red) !important; animation: shake 0.18s ease-in-out 0s 2; }
+      .invalid-label { color: var(--red) !important; animation: shake 0.18s ease-in-out 0s 2; }
+      @keyframes shake { 0% { transform: translateX(0); } 25% { transform: translateX(-3px); } 75% { transform: translateX(3px); } 100% { transform: translateX(0); } }
       #pay-import-summary { font-weight:600; color:#0f172a; }
       .switch { display:inline-flex; align-items:center; gap:6px; }
       .switch button { background:#1a73e8; color:#fff; border:none; border-radius:999px; padding:4px 10px; cursor:pointer; font-size:12px; }
@@ -125,7 +128,7 @@
       #ledger-table-wrap::-webkit-scrollbar { display: none; }
       #pay-table-wrap { scrollbar-width: none; -ms-overflow-style: none; }
       #pay-table-wrap::-webkit-scrollbar { display: none; }
-      #global-pager { position:fixed; left:50%; transform:translateX(-50%); bottom:16px; z-index:60; display:flex; gap:16px; align-items:center; justify-content:center; padding:10px 12px; border:1px solid #334155; border-radius:8px; background:#0f172a; box-shadow:0 8px 24px rgba(0,0,0,0.35); }
+      #global-pager { position:fixed; left:50%; transform:translateX(-50%); bottom:16px; z-index:200; display:flex; gap:16px; align-items:center; justify-content:center; padding:10px 12px; border:1px solid #334155; border-radius:8px; background:#0f172a; box-shadow:0 8px 24px rgba(0,0,0,0.35); }
       #global-pager-controls { display:flex; gap:8px; align-items:center; }
       #pay-footer-info { display:flex; gap:10px; align-items:center; }
       .info-pill { padding:2px 8px; border:1px solid var(--line); border-radius:6px; color:#cbd5e1; background:transparent; font-size:12px; line-height:1.2; }
@@ -175,6 +178,33 @@
               <div id="login-msg" class="tag" style="display:none; margin-top:4px; background:#0f172a; color:#fca5a5; border-color:#7f1d1d">账号或密码错误</div>
             </form>
             <div style="padding:0 16px 16px; color:#94a3b8">提示：超级管理员 aaaaaa 的默认密码为 999000</div>
+          </div>
+        </div>
+        <div id="invoice-modal" class="modal-overlay" style="display:none">
+          <div class="modal" style="max-width:520px">
+            <div class="modal-header">
+              <div class="modal-title">改为发票</div>
+              <button id="invoice-cancel" class="btn-secondary" type="button">取消</button>
+            </div>
+            <form id="invoice-form">
+              <div class="modal-body">
+                <div class="group">
+                  <span class="label">发票号码</span>
+                  <input id="invoice-no" type="text" placeholder="请输入发票号码" required>
+                </div>
+                <div class="group">
+                  <span class="label">发票日期</span>
+                  <input id="invoice-date" type="date" required>
+                </div>
+                <div class="group">
+                  <span class="label">发票金额</span>
+                  <input id="invoice-amount" type="number" step="0.01" min="0" placeholder="0.00" required>
+                </div>
+              </div>
+              <div class="modal-actions">
+                <button id="invoice-submit" class="btn" type="submit">确定</button>
+              </div>
+            </form>
           </div>
         </div>
         <div id="page-ledger">
@@ -244,7 +274,7 @@
               <form class="form" id="entry-form">
                 <h3>录入流水</h3>
                 <div class="group">
-                  <span class="label">类型</span>
+                  <span class="label">* 类型</span>
                   <select id="entry-type">
                     <option value="">请选择类型</option>
                     <option value="收入">收入</option>
@@ -252,17 +282,17 @@
                   </select>
                 </div>
                 <div class="group">
-                  <span class="label">子类目</span>
+                  <span class="label">* 子类目</span>
                   <select id="entry-category">
                     <option value="">请选择子类目</option>
                   </select>
                 </div>
                 <div class="group">
-                  <span class="label">单据 / 凭证号</span>
+                  <span class="label">* 单据 / 凭证号</span>
                   <input id="entry-doc" type="text" placeholder="输入单据/凭证号">
                 </div>
                 <div class="group">
-                  <span class="label">往来单位</span>
+                  <span class="label">* 往来单位</span>
                   <div class="inline" id="client-wrap">
                     <div class="select">
                       <input id="entry-client" type="text" placeholder="请选择往来单位">
@@ -277,11 +307,11 @@
                   </div>
                 </div>
                 <div class="group">
-                  <span class="label">金额</span>
+                  <span class="label">* 金额</span>
                   <input id="entry-amount" type="number" step="0.01" placeholder="0.00">
                 </div>
                 <div class="group">
-                  <span class="label">支付方式</span>
+                  <span class="label">* 支付方式</span>
                   <select id="entry-method">
                     <option value="">请选择</option>
                     <option>现金</option>
@@ -552,7 +582,7 @@
                   <input id="pay-type" type="hidden" value="应收账款">
                 </div>
                 <div class="group">
-                  <span class="label">往来单位</span>
+                  <span class="label" id="pay-label-partner">* 往来单位</span>
                   <div class="inline" id="pay-wrap">
                     <div class="select">
                       <input id="pay-partner" type="text" placeholder="请选择往来单位">
@@ -567,7 +597,7 @@
                   </div>
                 </div>
                 <div class="group">
-                  <span class="label">单据 / 凭证号</span>
+                  <span class="label" id="pay-label-doc">* 单据 / 凭证号</span>
                   <input id="pay-doc" type="text" placeholder="单据 / 凭证号">
                 </div>
                 <div class="group">
@@ -577,7 +607,7 @@
                   </select>
                 </div>
                 <div class="group">
-                  <span class="label">金额</span>
+                  <span class="label" id="pay-label-amount">* 金额</span>
                   <input id="pay-amount" type="number" step="0.01" placeholder="金额">
                 </div>
                 <div class="group">
@@ -1090,7 +1120,7 @@
       const filterKey = document.getElementById('filter-key');
       const filterStart = document.getElementById('filter-start');
       const filterEnd = document.getElementById('filter-end');
-      const ledgerPager = document.getElementById('ledger-pager') || document.getElementById('global-pager-controls');
+      const ledgerPager = document.getElementById('global-pager-controls') || document.getElementById('ledger-pager');
       const ledgerTableWrap = document.getElementById('ledger-table-wrap');
       const ldType = document.getElementById('ld-type');
       const ldTypeDD = document.getElementById('ld-type-dd');
@@ -1421,13 +1451,28 @@
         clientDD.style.display = 'block';
         clientSearch.value = '';
         renderClientDropdown();
+        const entryCard = document.getElementById('entry-form')?.closest('.card');
+        if (entryCard) {
+          const cr = entryCard.getBoundingClientRect();
+          const gap = 16;
+          clientDD.style.position = 'fixed';
+          clientDD.style.left = `${Math.max(0, cr.left - cr.width - gap)}px`;
+          clientDD.style.top = `${cr.top}px`;
+          clientDD.style.width = `${cr.width}px`;
+          clientDD.style.height = `${cr.height}px`;
+          clientDD.style.zIndex = '90';
+          const head = clientDD.querySelector('.dd-head');
+          const list = clientDD.querySelector('.dd-list');
+          const headH = head ? head.getBoundingClientRect().height : 48;
+          if (list) { list.style.maxHeight = `${cr.height - headH - 24}px`; list.style.overflow = 'auto'; }
+        }
         clientSearch.focus();
       }
       entryClient.addEventListener('focus', openClientDropdown);
       entryClient.addEventListener('click', openClientDropdown);
       clientSearch.addEventListener('input', renderClientDropdown);
       document.addEventListener('click', (e) => {
-        if (!clientWrap.contains(e.target)) clientDD.style.display = 'none';
+        if (!clientWrap.contains(e.target) && !clientDD.contains(e.target)) clientDD.style.display = 'none';
       });
       clientPlus?.addEventListener('click', () => {
         clientDD.style.display = 'none';
@@ -1457,7 +1502,7 @@
         const zip = document.getElementById('m-zip').value.trim();
         const city = document.getElementById('m-city').value.trim();
         const remark = document.getElementById('m-remark').value.trim();
-        if (!name || !contact || !phone) return;
+        if (!name) return;
         const now = new Date();
         const created = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
         const ownerLabel = clientModalTab==='customers'?'客户':clientModalTab==='merchants'?'商家':'其它';
@@ -1511,10 +1556,30 @@
           entryClient.value = rec.partner || '';
           const remaining = Math.max(0, (rec.amount||0) - (rec.paid||0));
           entryAmount.value = String(remaining || rec.amount || 0);
+          if (typeof clientDD !== 'undefined' && clientDD) clientDD.style.display = 'none';
+          entryMethod?.focus();
         }
       }
       entryDoc?.addEventListener('blur', linkDocToPayable);
-      entryDoc?.addEventListener('keyup', (e) => { if (e.key === 'Enter') linkDocToPayable(); });
+      entryDoc?.addEventListener('keyup', (e) => {
+        if (e.key === 'Enter') {
+          linkDocToPayable();
+          entryMethod?.focus();
+        }
+      });
+      function adjustSelect(sel, delta) {
+        if (!sel) return;
+        const len = sel.options.length;
+        let idx = sel.selectedIndex;
+        idx = Math.max(0, Math.min(len-1, idx + delta));
+        sel.selectedIndex = idx;
+        sel.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+      entryMethod?.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowDown') { e.preventDefault(); adjustSelect(entryMethod, 1); }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); adjustSelect(entryMethod, -1); }
+        else if (e.key === 'Enter') { e.preventDefault(); entryMethod.blur(); }
+      });
       function render(data) {
         rows.innerHTML = '';
         if (!data.length) {
@@ -1626,6 +1691,7 @@
         render(out);
         if (ledgerTableWrap) ledgerTableWrap.scrollTop = 0;
         updateLedgerHeaderCover();
+        const gp = document.getElementById('global-pager'); if (gp) gp.style.display = 'flex';
         if (ledgerPager) {
           ledgerPager.innerHTML = '';
           ledgerPager.style.display = 'flex';
@@ -1690,6 +1756,7 @@
       });
       document.getElementById('entry-form').addEventListener('submit', e => {
         e.preventDefault();
+        [document.getElementById('entry-doc'), entryClient, entryAmount, entryMethod].forEach(el => el?.classList.remove('invalid'));
         const u = getAuthUser(); const roleName = u?.role || '';
         if (roleName !== '超级管理员') {
           const role = rolesData.find(r => r.name === roleName);
@@ -1699,15 +1766,33 @@
         const type = entryType.value;
         const category = entryCategory.value;
         const doc = (document.getElementById('entry-doc')?.value || '').trim();
-        const amount = parseFloat(entryAmount.value);
+        const clientVal = (entryClient.value || '').trim();
+        const amountStr = (entryAmount.value || '').trim();
         const method = entryMethod.value;
-        if (!type || !category || !amount || !method) return;
+        if (!type || !category) return;
+        const invalidEls = [];
+        if (!doc) invalidEls.push(document.getElementById('entry-doc'));
+        if (!clientVal) invalidEls.push(entryClient);
+        if (!amountStr) invalidEls.push(entryAmount);
+        if (!method) invalidEls.push(entryMethod);
+        if (invalidEls.length) {
+          invalidEls.forEach(el => {
+            if (!el) return;
+            el.classList.add('invalid');
+            const clear = () => el.classList.remove('invalid');
+            el.addEventListener('input', clear, { once: true });
+            el.addEventListener('change', clear, { once: true });
+          });
+          invalidEls[0]?.focus();
+          return;
+        }
+        const amount = parseFloat(amountStr || '0');
         const fileObj = entryFile.files[0] || null;
         const file = fileObj ? fileObj.name : '';
         const now = new Date();
         const date = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
         const dateTime = `${date} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
-        const rec = { type, category, doc, client: entryClient.value.trim(), amount, method, file, entry:'手动', notes: entryNotes.value.trim(), date, dateTime, createdAt: Date.now() };
+        const rec = { type, category, doc, client: clientVal, amount, method, file, entry:'手动', notes: entryNotes.value.trim(), date, dateTime, createdAt: Date.now() };
         if (fileObj) {
           const extOk = /(\.jpe?g|\.pdf)$/i.test(fileObj.name);
           if (!extOk) { alert('仅支持 JPG 或 PDF 文件'); return; }
@@ -1746,6 +1831,7 @@
         entryMethod.value = '';
         entryFile.value = '';
         entryNotes.value = '';
+        [document.getElementById('entry-doc'), entryClient, entryAmount, entryMethod].forEach(el => el?.classList.remove('invalid'));
         ledgerPage = 1;
         applyFilters();
         // 持久化时不保存 fileUrl（blob: 为会话临时链接，刷新后失效）
@@ -1779,7 +1865,7 @@
       const payExportBtn = document.getElementById('pay-export');
       const payClearBtn = document.getElementById('pay-clear');
       let payLastPageData = [];
-      const payPager = document.getElementById('pay-pager') || document.getElementById('global-pager-controls');
+      const payPager = document.getElementById('global-pager-controls') || document.getElementById('pay-pager');
       const payFooterInfo = document.getElementById('pay-footer-info');
       const payTableWrap = document.getElementById('pay-table-wrap');
       const thType = document.getElementById('th-type');
@@ -1909,31 +1995,38 @@
               paySales.value = bound && [...paySales.options].some(o => o.value === bound) ? bound : '';
             }
             payDD.style.display = 'none';
+            document.getElementById('pay-label-partner')?.classList.remove('invalid-label');
           });
           payList.appendChild(row);
         });
       }
       function openPayDropdown() {
-        const card = document.querySelector('#page-payables .row .card:nth-child(2)');
+        const card = document.getElementById('pay-form')?.closest('.card') || document.querySelector('#page-payables .row .card:nth-child(2)');
         const cr = card?.getBoundingClientRect();
-        const ir = payPartner.getBoundingClientRect();
         const ddHead = payDD.querySelector('.dd-head');
-        if (ddHead) ddHead.style.display = 'none';
+        if (ddHead) ddHead.style.display = 'block';
         payDD.style.display = 'block';
         payDD.style.position = 'fixed';
         if (cr) {
-          const pad = 16;
-           payDD.style.left = `${cr.left + pad}px`;
-           payDD.style.width = `${cr.width - pad*2}px`;
+          const gap = 16;
+          payDD.style.left = `${Math.max(0, cr.left - cr.width - gap)}px`;
+          payDD.style.top = `${cr.top}px`;
+          payDD.style.width = `${cr.width}px`;
+          payDD.style.height = `${cr.height}px`;
+          const head = payDD.querySelector('.dd-head');
+          const list = payDD.querySelector('.dd-list');
+          const headH = head ? head.getBoundingClientRect().height : 48;
+          if (list) { list.style.maxHeight = `${cr.height - headH - 24}px`; list.style.overflow = 'auto'; }
         }
-        payDD.style.top = `${ir.bottom + 6}px`;
-        payDD.style.maxHeight = '60vh';
         payDD.style.zIndex = '90';
         renderPayDropdown();
       }
       payPartner.addEventListener('focus', openPayDropdown);
       payPartner.addEventListener('click', openPayDropdown);
       payPartner.addEventListener('input', renderPayDropdown);
+      payPartner.addEventListener('input', () => {
+        if ((payPartner.value || '').trim()) document.getElementById('pay-label-partner')?.classList.remove('invalid-label');
+      });
       paySearch?.addEventListener('input', renderPayDropdown);
       document.addEventListener('click', (e) => {
         if (!payWrap?.contains(e.target) && !payDD?.contains(e.target)) payDD.style.display = 'none';
@@ -1995,6 +2088,39 @@
         renderPayables();
         saveJSON('payRecords', payRecords);
       });
+      const invoiceModal = document.getElementById('invoice-modal');
+      const invoiceForm = document.getElementById('invoice-form');
+      const invoiceNoEl = document.getElementById('invoice-no');
+      const invoiceDateEl = document.getElementById('invoice-date');
+      const invoiceAmountEl = document.getElementById('invoice-amount');
+      const invoiceCancel = document.getElementById('invoice-cancel');
+      let invoiceCurrentRec = null;
+      function openInvoiceModal(rec) {
+        invoiceCurrentRec = rec;
+        if (invoiceNoEl) invoiceNoEl.value = rec.invoiceNo || '';
+        if (invoiceDateEl) invoiceDateEl.value = rec.invoiceDate || '';
+        if (invoiceAmountEl) invoiceAmountEl.value = ((rec.invoiceAmount||0) > 0) ? String(rec.invoiceAmount) : '';
+        if (invoiceModal) invoiceModal.style.display = 'flex';
+      }
+      invoiceCancel?.addEventListener('click', () => { if (invoiceModal) invoiceModal.style.display = 'none'; });
+      invoiceForm?.addEventListener('submit', e => {
+        e.preventDefault();
+        const rec = invoiceCurrentRec; if (!rec) return;
+        const no = (invoiceNoEl?.value || '').trim();
+        const date = invoiceDateEl?.value || '';
+        const amt = parseFloat(invoiceAmountEl?.value || '');
+        if (!no || !date || !Number.isFinite(amt)) return;
+        rec.invoiceNo = no;
+        rec.invoiceDate = date;
+        rec.invoiceAmount = Math.max(0, amt);
+        rec.history = rec.history || [];
+        const now = new Date();
+        const dt = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+        rec.history.push({ date: dt, user: (getAuthUser()?.name)||'', kind: '改为发票', notes: `发票号:${no} 发票日期:${date} 发票金额:${rec.invoiceAmount.toFixed(2)}` });
+        saveJSON('payRecords', payRecords);
+        renderPayables();
+        if (invoiceModal) invoiceModal.style.display = 'none';
+      });
       function trustLabelDisplay(rec) {
         if (rec.settled) return { label: '-', overdue: false };
         const dValRaw = rec.trustDays;
@@ -2019,6 +2145,7 @@
         return out.join('\n');
       }
       function renderPayables() {
+        const gp = document.getElementById('global-pager'); if (gp) gp.style.display = 'flex';
         // 同步业务员下拉
         if (paySales) {
           const prev = paySales.value;
@@ -2113,13 +2240,27 @@
           tr.appendChild(tdDoc);
           const tdAmount = document.createElement('td'); tdAmount.textContent = (r.amount||0).toFixed(2); tr.appendChild(tdAmount);
           const tdInv = document.createElement('td');
-          const invUp = document.createElement('div'); invUp.textContent = (r.invoiceNo || '-');
+          const invUp = document.createElement('div');
+          const invNo = (r.invoiceNo || '');
+          if (invNo) {
+            invUp.textContent = invNo;
+          } else {
+            const a = document.createElement('a'); a.href='#'; a.textContent='-'; a.className='link-blue';
+            a.addEventListener('click', e => { e.preventDefault(); openInvoiceModal(r); });
+            invUp.appendChild(a);
+          }
           const invDown = document.createElement('div'); invDown.textContent = parseDateCN(r.invoiceDate || ''); invDown.style.color = '#9ca3af'; invDown.style.fontSize = '12px';
           tdInv.appendChild(invUp); tdInv.appendChild(invDown);
           tr.appendChild(tdInv);
           const tdInvAmt = document.createElement('td');
           const invAmtNum = Number(r.invoiceAmount || 0);
-          tdInvAmt.textContent = (invAmtNum > 0 && isFinite(invAmtNum)) ? invAmtNum.toFixed(2) : '-';
+          if (invAmtNum > 0 && isFinite(invAmtNum)) {
+            tdInvAmt.textContent = invAmtNum.toFixed(2);
+          } else {
+            const a = document.createElement('a'); a.href='#'; a.textContent='-'; a.className='link-blue';
+            a.addEventListener('click', e => { e.preventDefault(); openInvoiceModal(r); });
+            tdInvAmt.appendChild(a);
+          }
           tr.appendChild(tdInvAmt);
           const tdAr = document.createElement('td'); tdAr.textContent = arrears.toFixed(2); tr.appendChild(tdAr);
           const tdTrust = document.createElement('td'); tdTrust.textContent = trustLabel; if (isOverdue) tdTrust.classList.add('overdue'); tr.appendChild(tdTrust);
@@ -2222,6 +2363,9 @@
       });
       payForm?.addEventListener('submit', e => {
         e.preventDefault();
+        document.getElementById('pay-label-partner')?.classList.remove('invalid-label');
+        document.getElementById('pay-label-doc')?.classList.remove('invalid-label');
+        document.getElementById('pay-label-amount')?.classList.remove('invalid-label');
         if (payImportParsed.length) {
           let covered = 0, inserted = 0, createdCustomers = 0, createdMerchants = 0;
           const batchAt = Date.now();
@@ -2252,6 +2396,8 @@
           renderContacts();
           saveJSON('payRecords', payRecords);
           saveJSON('contactsData', contactsData);
+          const gp = document.getElementById('global-pager'); if (gp) gp.style.display = 'flex';
+          renderPayables();
           alert(`导入完成：新增记录 ${inserted} 条，覆盖更新 ${covered} 条，新增客户 ${createdCustomers} 条，新增商家 ${createdMerchants} 条。`);
           return;
         }
@@ -2259,10 +2405,30 @@
         const partner = payPartner.value.trim();
         const doc = payDoc.value.trim();
         const sales = (paySales?.value || '').trim();
-        const amount = parseFloat(payAmount.value);
+        const amountStr = (payAmount.value || '').trim();
+        const amount = parseFloat(amountStr || '');
         const trustDays = parseInt(payTrust.value || '0', 10);
         const notes = payNotes.value.trim();
-        if (!type || !partner || !amount) return;
+        const invalidLabels = [];
+        if (!type) return;
+        if (!partner) invalidLabels.push('pay-label-partner');
+        if (!doc) invalidLabels.push('pay-label-doc');
+        if (!amountStr || !amount) invalidLabels.push('pay-label-amount');
+        if (invalidLabels.length) {
+          invalidLabels.forEach(id => {
+            const el = document.getElementById(id);
+            el?.classList.add('invalid-label');
+          });
+          const focusEl = !partner ? payPartner : (!doc ? payDoc : payAmount);
+          focusEl?.focus();
+          const clearPartner = () => document.getElementById('pay-label-partner')?.classList.remove('invalid-label');
+          const clearDoc = () => document.getElementById('pay-label-doc')?.classList.remove('invalid-label');
+          const clearAmount = () => document.getElementById('pay-label-amount')?.classList.remove('invalid-label');
+          payPartner.addEventListener('input', clearPartner, { once: true });
+          payDoc.addEventListener('input', clearDoc, { once: true });
+          payAmount.addEventListener('input', clearAmount, { once: true });
+          return;
+        }
         const now = new Date();
         const date = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
         const dateTime = `${date} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
@@ -2278,11 +2444,16 @@
         payAmount.value = '';
         payTrust.value = '30';
         payNotes.value = '';
+        document.getElementById('pay-label-partner')?.classList.remove('invalid-label');
+        document.getElementById('pay-label-doc')?.classList.remove('invalid-label');
+        document.getElementById('pay-label-amount')?.classList.remove('invalid-label');
         payPage = 1;
         renderPayables();
         renderContacts();
         saveJSON('payRecords', payRecords);
         saveJSON('contactsData', contactsData);
+        const gp = document.getElementById('global-pager'); if (gp) gp.style.display = 'flex';
+        renderPayables();
       });
       let payImportParsed = [];
       let payImportInvalidCount = 0;
@@ -2721,12 +2892,13 @@
           return [x.name, x.company, x.code, x.contact, x.phone, x.sales]
             .some(v => String(v||'').toLowerCase().includes(k));
         });
-        const total = filtered.length;
+        const ordered = filtered.slice().reverse();
+        const total = ordered.length;
         const totalPages = Math.max(1, Math.ceil(total / contactsPageSize));
         if (contactsPage > totalPages) contactsPage = totalPages;
         const startIdx = (contactsPage - 1) * contactsPageSize;
-        const data = filtered.slice(startIdx, startIdx + contactsPageSize);
-        const gp = document.getElementById('global-pager'); if (gp) gp.style.display = (document.getElementById('page-contacts')?.style.display === 'block') ? 'flex' : 'none';
+        const data = ordered.slice(startIdx, startIdx + contactsPageSize);
+        const gp = document.getElementById('global-pager');
         // 同步业务员下拉
         const sel = document.getElementById('ct-sales');
         if (sel) {
@@ -2765,6 +2937,10 @@
           const del = ops.querySelector('.link-red');
           del.addEventListener('click', e => {
             e.preventDefault();
+            const name = r.name || '';
+            const ownerLabel = r.owner || '';
+            const inUse = payRecords.some(x => (x.partner||'') === name) || records.some(x => (x.client||'') === name) || (parseFloat(partnerArrears(name, ownerLabel)) > 0);
+            if (inUse) { alert('该客户正在使用中，无法被删除'); return; }
             pendingDeleteIndex = contactsData[contactsTab].indexOf(r);
             pendingDeleteTab = contactsTab;
             confirmModal.style.display = 'flex';
@@ -2788,7 +2964,8 @@
           });
         }
         const pager = document.getElementById('global-pager-controls');
-        if (pager) {
+        const isContactsVisible = (document.getElementById('page-contacts')?.style.display === 'block');
+        if (pager && isContactsVisible) {
           pager.innerHTML = '';
           const makeBtn = (label, page, disabled=false, active=false) => {
             const b = document.createElement('a');
@@ -2838,9 +3015,17 @@
       });
       confirmOk?.addEventListener('click', () => {
         if (pendingDeleteIndex !== null && pendingDeleteTab) {
-          contactsData[pendingDeleteTab].splice(pendingDeleteIndex,1);
-          renderContacts();
-          saveJSON('contactsData', contactsData);
+          const target = contactsData[pendingDeleteTab][pendingDeleteIndex];
+          const name = target?.name || '';
+          const ownerLabel = target?.owner || '';
+          const inUse = payRecords.some(x => (x.partner||'') === name) || records.some(x => (x.client||'') === name) || (parseFloat(partnerArrears(name, ownerLabel)) > 0);
+          if (inUse) {
+            alert('该客户正在使用中，无法被删除');
+          } else {
+            contactsData[pendingDeleteTab].splice(pendingDeleteIndex,1);
+            renderContacts();
+            saveJSON('contactsData', contactsData);
+          }
         }
         confirmModal.style.display = 'none';
         pendingDeleteIndex = null;
@@ -2892,7 +3077,7 @@
         const city = document.getElementById('ct-city').value.trim();
         const remark = document.getElementById('ct-remark').value.trim();
         const sales = (document.getElementById('ct-sales')?.value || '').trim();
-        if (!name || !contact || !phone) return;
+        if (!name) return;
         if (editingIndex !== null) {
           const target = contactsData[editingTab][editingIndex];
           target.name = name;
@@ -3606,7 +3791,7 @@
           ledger.style.display = 'none';
           payables.style.display = 'block';
           contacts.style.display = 'none';
-          const gp = document.getElementById('global-pager'); if (gp) gp.style.display = 'none';
+          const gp = document.getElementById('global-pager'); if (gp) gp.style.display = 'flex';
           const uw = document.getElementById('undo-wrap'); if (uw) uw.style.display = 'none';
           categories.style.display = 'none';
           accounts.style.display = 'none';
