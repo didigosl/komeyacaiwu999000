@@ -81,15 +81,27 @@
         e.preventDefault();
         const name = (u.value || '').trim();
         const pass = p.value || '';
-        let ok = false;
-        const map = getPwdMap();
-        if (name === 'aaaaaa' && pass === '999000') ok = true;
-        else if (map[name] && pass === map[name]) ok = true;
-        if (!ok) { err.style.display = 'block'; return; }
-        err.style.display = 'none';
-        if (def.checked && name) localStorage.setItem('defaultLoginUser', name);
-        setAuthUser({ name });
-        location.href = './index.html#ledger';
+        (async () => {
+          err.style.display = 'none';
+          try {
+            const r = await fetch('/api/auth/login', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name, password: pass }) });
+            if (r.ok) {
+              const data = await r.json();
+              if (def.checked && name) localStorage.setItem('defaultLoginUser', name);
+              setAuthUser({ name, token: data.token });
+              location.href = './index.html#ledger';
+              return;
+            }
+          } catch {}
+          let ok = false;
+          const map = getPwdMap();
+          if (name === 'aaaaaa' && pass === '999000') ok = true;
+          else if (map[name] && pass === map[name]) ok = true;
+          if (!ok) { err.style.display = 'block'; return; }
+          if (def.checked && name) localStorage.setItem('defaultLoginUser', name);
+          setAuthUser({ name });
+          location.href = './index.html#ledger';
+        })();
       });
     </script>
   </body>

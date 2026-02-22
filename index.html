@@ -1223,6 +1223,24 @@
       function saveJSON(key, val) {
         localStorage.setItem(key, JSON.stringify(val));
       }
+      async function apiFetch(path, opts) {
+        const au = getAuthUser();
+        const h = Object.assign({}, (opts && opts.headers) || {});
+        if (au && au.token) h.Authorization = 'Bearer ' + au.token;
+        const r = await fetch('/api' + path, Object.assign({}, opts, { headers: h }));
+        return r;
+      }
+      async function loadLedgerFromServer() {
+        try {
+          const r = await apiFetch('/ledger?page=1&pageSize=1000', { method: 'GET' });
+          if (!r.ok) return;
+          const data = await r.json();
+          const items = Array.isArray(data.items) ? data.items : [];
+          records.splice(0, records.length, ...items.map(x => ({
+            type:x.type, category:x.category, doc:x.doc, client:x.client, amount:Number(x.amount||0), method:x.method, file:x.file||'', notes:x.notes||'', date:x.date||'', dateTime:x.date_time||'', createdAt:x.created_at||0, entry:'接口', createdBy:x.created_by||''
+          })));
+        } catch {}
+      }
       function initPersist() {
         const recs = loadJSON('records', []);
         if (Array.isArray(recs)) {
@@ -1426,26 +1444,36 @@
       }
       function renderClientDropdown() {
         const q = (clientSearch.value || '').trim();
-        const data = allContacts().filter(x => {
-          if (!q) return true;
-          return [x.name,x.contact,x.phone,x.city,(x.remark||'')].some(v => (v||'').includes(q));
-        });
         clientList.innerHTML = '';
-        data.forEach(item => {
-          const row = document.createElement('div');
-          row.className = 'dd-item';
-          const left = document.createElement('div');
-          left.textContent = item.name;
-          const right = document.createElement('div');
-          right.style.color = '#94a3b8';
-          right.textContent = `${item.contact || ''} ${item.phone || ''} ${item.city || ''}`.trim();
-          row.append(left, right);
-          row.addEventListener('click', () => {
-            entryClient.value = item.name;
-            clientDD.style.display = 'none';
+        (async () => {
+          let items = null;
+          try {
+            const r = await apiFetch('/contacts?type=all' + (q ? ('&q=' + encodeURIComponent(q)) : ''), { method:'GET' });
+            if (r.ok) {
+              const data = await r.json();
+              if (Array.isArray(data.items)) items = data.items.map(x => ({ name:x.name, contact:x.contact, phone:x.phone, city:x.city }));
+            }
+          } catch {}
+          const data = items || allContacts().filter(x => {
+            if (!q) return true;
+            return [x.name,x.contact,x.phone,x.city,(x.remark||'')].some(v => (v||'').includes(q));
           });
-          clientList.appendChild(row);
-        });
+          data.forEach(item => {
+            const row = document.createElement('div');
+            row.className = 'dd-item';
+            const left = document.createElement('div');
+            left.textContent = item.name;
+            const right = document.createElement('div');
+            right.style.color = '#94a3b8';
+            right.textContent = `${item.contact || ''} ${item.phone || ''} ${item.city || ''}`.trim();
+            row.append(left, right);
+            row.addEventListener('click', () => {
+              entryClient.value = item.name;
+              clientDD.style.display = 'none';
+            });
+            clientList.appendChild(row);
+          });
+        })();
       }
       function openClientDropdown() {
         clientDD.style.display = 'block';
@@ -1801,6 +1829,11 @@
           rec.fileUrl = URL.createObjectURL(fileObj);
         }
         records.push(rec);
+        (async () => {
+          try {
+            await apiFetch('/ledger', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ type, category, doc, client: clientVal, amount, method, file, notes: entryNotes.value.trim() }) });
+          } catch {}
+        })();
         // 关联应收/应付账款的付款累积
         if (doc) {
           const targetType = type === '收入' ? '应收账款' : (type === '支出' ? '应付账款' : null);
@@ -2113,12 +2146,21 @@
         rec.invoiceNo = no;
         rec.invoiceDate = date;
         rec.invoiceAmount = Math.max(0, amt);
-        rec.history = rec.history || [];
-        const now = new Date();
-        const dt = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
-        rec.history.push({ date: dt, user: (getAuthUser()?.name)||'', kind: '改为发票', notes: `发票号:${no} 发票日期:${date} 发票金额:${rec.invoiceAmount.toFixed(2)}` });
-        saveJSON('payRecords', payRecords);
-        renderPayables();
+        (async () => {
+          try {
+            if (rec.id) {
+              const r = await apiFetch('/payables/' + rec.id + '/invoice', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ invoice_no:no, invoice_date:date, invoice_amount:rec.invoiceAmount }) });
+              if (r.ok) {
+                rec.history = rec.history || [];
+                const now = new Date();
+                const dt = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+                rec.history.push({ date: dt, user: (getAuthUser()?.name)||'', kind: '改为发票', notes: `发票号:${no} 发票日期:${date} 发票金额:${rec.invoiceAmount.toFixed(2)}` });
+              }
+            }
+          } catch {}
+          saveJSON('payRecords', payRecords);
+          renderPayables();
+        })();
         if (invoiceModal) invoiceModal.style.display = 'none';
       });
       function trustLabelDisplay(rec) {
@@ -2438,6 +2480,21 @@
         rec.batchOrder = 0;
         rec.history.push({ date: dateTime, user: creator, kind: '创建', amount, partner, doc, notes });
         payRecords.push(rec);
+        (async () => {
+          try {
+            const r = await apiFetch('/payables', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ type, partner, doc, amount, trustDays, notes }) });
+            if (r.ok) {
+              const data = await r.json();
+              if (data && data.id) rec.id = data.id;
+            }
+          } catch {}
+          renderPayables();
+          renderContacts();
+          saveJSON('payRecords', payRecords);
+          saveJSON('contactsData', contactsData);
+          const gp = document.getElementById('global-pager'); if (gp) gp.style.display = 'flex';
+          renderPayables();
+        })();
         payPartner.value = '';
         payDoc.value = '';
         if (paySales) paySales.value = '';
@@ -2448,12 +2505,6 @@
         document.getElementById('pay-label-doc')?.classList.remove('invalid-label');
         document.getElementById('pay-label-amount')?.classList.remove('invalid-label');
         payPage = 1;
-        renderPayables();
-        renderContacts();
-        saveJSON('payRecords', payRecords);
-        saveJSON('contactsData', contactsData);
-        const gp = document.getElementById('global-pager'); if (gp) gp.style.display = 'flex';
-        renderPayables();
       });
       let payImportParsed = [];
       let payImportInvalidCount = 0;
@@ -3710,16 +3761,27 @@
         e.preventDefault();
         const name = (loginUser.value || '').trim();
         const pass = loginPass.value || '';
-        let ok = false;
-        if (name === 'aaaaaa' && pass === '999000') ok = true;
-        else {
-          const u = userAccounts.find(x => x.name === name);
-          if (u && u.password && pass === u.password) ok = true;
-        }
-        if (!ok) { loginMsg.style.display = 'inline-block'; return; }
-        loginMsg.style.display = 'none';
-        setAuthUser({ name, role: getUserRoleName(name) });
-        location.hash = '#ledger';
+        (async () => {
+          try {
+            const r = await apiFetch('/auth/login', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name, password: pass }) });
+            if (r.ok) {
+              const data = await r.json();
+              setAuthUser({ name, role: getUserRoleName(name), token: data.token });
+              location.hash = '#ledger';
+              return;
+            }
+          } catch {}
+          let ok = false;
+          if (name === 'aaaaaa' && pass === '999000') ok = true;
+          else {
+            const u = userAccounts.find(x => x.name === name);
+            if (u && u.password && pass === u.password) ok = true;
+          }
+          if (!ok) { loginMsg.style.display = 'inline-block'; return; }
+          loginMsg.style.display = 'none';
+          setAuthUser({ name, role: getUserRoleName(name) });
+          location.hash = '#ledger';
+        })();
       });
       function route() {
         const hash = location.hash || '#ledger';
@@ -3785,7 +3847,7 @@
             setLabel(document.getElementById('ld-cat-label'), '子类目', false);
             setLabel(document.getElementById('ld-owner-label'), '往来单位', false);
           } catch {}
-          applyFilters();
+          (async () => { await loadLedgerFromServer(); applyFilters(); })();
         } else if (hash === '#payables') {
           if (!ensureView('payables')) return;
           ledger.style.display = 'none';
@@ -3815,7 +3877,19 @@
             };
             setDefault();
           } catch {}
-          renderPayables();
+          (async () => {
+            try {
+              const r = await apiFetch('/payables?page=1&pageSize=1000', { method:'GET' });
+              if (r.ok) {
+                const data = await r.json();
+                const items = Array.isArray(data.items) ? data.items : [];
+                payRecords.splice(0, payRecords.length, ...items.map(x => ({
+                  id:x.id, type:x.type, partner:x.partner, doc:x.doc, amount:Number(x.amount||0), paid:Number(x.paid||0), settled:!!x.settled, trustDays:x.trust_days||30, notes:x.notes||'', invoiceNo:x.invoice_no||'', invoiceDate:x.invoice_date||'', invoiceAmount:Number(x.invoice_amount||0), createdAt:x.created_at||0, history: Array.isArray(x.history)?x.history:[]
+                })));
+              }
+            } catch {}
+            renderPayables();
+          })();
         } else if (hash === '#contacts') {
           if (!ensureView('contacts')) return;
           ledger.style.display = 'none';
@@ -3937,6 +4011,7 @@
       window.addEventListener('hashchange', route);
       initPersist();
       setAuthUI();
+      try {} catch {}
       route();
       applyFilters();
       window.addEventListener('resize', updateLedgerHeaderCover);
