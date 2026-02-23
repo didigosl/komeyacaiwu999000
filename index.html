@@ -2213,6 +2213,14 @@
       }
       function renderPayables() {
         const gp = document.getElementById('global-pager'); if (gp) gp.style.display = 'flex';
+        if (!payRecords.length) {
+          try {
+            const restored = loadJSON('payRecords', []);
+            if (Array.isArray(restored) && restored.length) {
+              payRecords.splice(0, payRecords.length, ...restored);
+            }
+          } catch {}
+        }
         // 同步业务员下拉
         if (paySales) {
           const prev = paySales.value;
