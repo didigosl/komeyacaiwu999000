@@ -2849,6 +2849,26 @@
         renderContacts?.();
         saveJSON('payRecords', payRecords);
         saveJSON('contactsData', contactsData);
+        (async () => {
+          try {
+            const postOne = async (rec) => {
+              const body = JSON.stringify({
+                type: rec.type, partner: rec.partner, doc: rec.doc,
+                amount: Number(rec.amount||0), trustDays: Number(rec.trustDays||30),
+                notes: rec.notes||'', invoice_no: rec.invoiceNo||'',
+                invoice_date: rec.invoiceDate||'', invoice_amount: Number(rec.invoiceAmount||0)
+              });
+              const r = await apiFetch('/payables', { method:'POST', headers:{'Content-Type':'application/json'}, body });
+              if (r && r.ok) {
+                const data = await r.json();
+                if (data && data.id) rec.id = data.id;
+              }
+            };
+            for (const rec of payRecords) {
+              if (rec.source === 'import' && (!rec.id)) { try { await postOne(rec); } catch {} }
+            }
+          } catch {}
+        })();
         alert(`导入完成：新增记录 ${inserted} 条，覆盖更新 ${covered} 条，新增客户 ${createdCustomers} 条，新增商家 ${createdMerchants} 条。`);
       });
       let contactsTab = 'customers';
