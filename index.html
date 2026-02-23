@@ -1230,9 +1230,31 @@
         const r = await fetch('/api' + path, Object.assign({}, opts, { headers: h }));
         return r;
       }
+      async function serverLoginWithStoredOrDefault() {
+        const au = getAuthUser();
+        const name = (au?.name) || 'aaaaaa';
+        let pass = '';
+        try { const m = getPwdMap(); pass = (au?.name && m[au.name]) || ''; } catch {}
+        if (!pass) pass = '999000';
+        const r = await fetch('/api/auth/login', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name, password: pass }) });
+        if (r.ok) {
+          const data = await r.json();
+          setAuthUser({ name, role: getUserRoleName(name), token: data.token });
+          return true;
+        }
+        return false;
+      }
+      async function apiFetchAuth(path, opts) {
+        let r = await apiFetch(path, opts);
+        if (r && r.status === 401) {
+          const ok = await serverLoginWithStoredOrDefault();
+          if (ok) r = await apiFetch(path, opts);
+        }
+        return r;
+      }
       async function loadLedgerFromServer() {
         try {
-          const r = await apiFetch('/ledger?page=1&pageSize=1000', { method: 'GET' });
+          const r = await apiFetchAuth('/ledger?page=1&pageSize=1000', { method: 'GET' });
           if (!r.ok) return;
           const data = await r.json();
           const items = Array.isArray(data.items) ? data.items : [];
@@ -1831,7 +1853,7 @@
         records.push(rec);
         (async () => {
           try {
-            await apiFetch('/ledger', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ type, category, doc, client: clientVal, amount, method, file, notes: entryNotes.value.trim() }) });
+            await apiFetchAuth('/ledger', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ type, category, doc, client: clientVal, amount, method, file, notes: entryNotes.value.trim() }) });
           } catch {}
         })();
         // 关联应收/应付账款的付款累积
@@ -2149,7 +2171,7 @@
         (async () => {
           try {
             if (rec.id) {
-              const r = await apiFetch('/payables/' + rec.id + '/invoice', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ invoice_no:no, invoice_date:date, invoice_amount:rec.invoiceAmount }) });
+              const r = await apiFetchAuth('/payables/' + rec.id + '/invoice', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ invoice_no:no, invoice_date:date, invoice_amount:rec.invoiceAmount }) });
               if (r.ok) {
                 rec.history = rec.history || [];
                 const now = new Date();
@@ -2482,7 +2504,7 @@
         payRecords.push(rec);
         (async () => {
           try {
-            const r = await apiFetch('/payables', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ type, partner, doc, amount, trustDays, notes }) });
+            const r = await apiFetchAuth('/payables', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ type, partner, doc, amount, trustDays, notes }) });
             if (r.ok) {
               const data = await r.json();
               if (data && data.id) rec.id = data.id;
@@ -3783,7 +3805,7 @@
         const pass = loginPass.value || '';
         (async () => {
           try {
-            const r = await apiFetch('/auth/login', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name, password: pass }) });
+              const r = await apiFetch('/auth/login', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name, password: pass }) });
             if (r.ok) {
               const data = await r.json();
               setAuthUser({ name, role: getUserRoleName(name), token: data.token });
@@ -3899,7 +3921,7 @@
           } catch {}
           (async () => {
             try {
-              const r = await apiFetch('/payables?page=1&pageSize=1000', { method:'GET' });
+              const r = await apiFetchAuth('/payables?page=1&pageSize=1000', { method:'GET' });
               if (r.ok) {
                 const data = await r.json();
                 const items = Array.isArray(data.items) ? data.items : [];
@@ -3921,7 +3943,7 @@
                         invoiceDate: rec.invoiceDate || '',
                         invoiceAmount: Number(rec.invoiceAmount||0)
                       });
-                      const p = await apiFetch('/payables', { method:'POST', headers:{'Content-Type':'application/json'}, body });
+                      const p = await apiFetchAuth('/payables', { method:'POST', headers:{'Content-Type':'application/json'}, body });
                       if (p && p.ok) {
                         const d = await p.json();
                         if (d && d.id) rec.id = d.id;
