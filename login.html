@@ -70,7 +70,15 @@
       function setAuthUser(user) { if (user) localStorage.setItem('authUser', JSON.stringify(user)); else localStorage.removeItem('authUser'); }
       function getPwdMap() { try { return JSON.parse(localStorage.getItem('userPasswords') || '{}'); } catch { return {}; } }
       (function fillUsers(){
-        const users = loadJSON('userAccounts', []);
+        let users = loadJSON('userAccounts', []);
+        if (!Array.isArray(users) || users.length === 0 || !users.some(u => u && u.name)) {
+          users = [
+            { id:2, name:'shuangqun', role:'股东', created:'2022-02-02 10:31:22', enabled:true },
+            { id:1, name:'aaaaaa', role:'超级管理员', created:'2022-01-29 07:40:15', enabled:true }
+          ];
+          localStorage.setItem('userAccounts', JSON.stringify(users));
+          const map = getPwdMap(); map['shuangqun'] = map['shuangqun'] || '111111'; localStorage.setItem('userPasswords', JSON.stringify(map));
+        }
         const names = ['aaaaaa', ...users.map(x => x.name).filter(Boolean).filter((n, i, a) => a.indexOf(n) === i && n!=='aaaaaa')];
         u.innerHTML = '';
         names.forEach(name => { const opt = document.createElement('option'); opt.value = name; opt.textContent = name; u.appendChild(opt); });

@@ -227,7 +227,7 @@
             </div>
             <div class="field" style="flex:1">
               <span class="label">关键词</span>
-              <input id="filter-key" type="text" placeholder="搜索关键词">
+              <input id="filter-key" type="text" placeholder="搜索关键词" autocomplete="off" autocapitalize="none" autocorrect="off" inputmode="search" name="ledgerFilter">
             </div>
           </div>
           <div class="row" id="ledger-row" style="display:grid; grid-template-columns:1fr 280px; gap:24px">
@@ -1118,6 +1118,8 @@
       const rows = document.getElementById('rows');
       const filterType = document.getElementById('filter-type');
       const filterKey = document.getElementById('filter-key');
+      try { filterKey?.setAttribute('autocomplete','off'); } catch {}
+      window.addEventListener('pageshow', () => { try { const el = document.getElementById('filter-key'); if (el) el.value=''; } catch {} });
       const filterStart = document.getElementById('filter-start');
       const filterEnd = document.getElementById('filter-end');
       const ledgerPager = document.getElementById('global-pager-controls') || document.getElementById('ledger-pager');
@@ -3908,6 +3910,9 @@
             ledgerHdrType = 'all';
             ledgerHdrCat = '';
             ledgerHdrOwner = '';
+            if (filterKey) filterKey.value = '';
+            ledgerPage = 1;
+            applyFilters();
             setLabel(document.getElementById('ld-type-label'), '类型', false);
             setLabel(document.getElementById('ld-cat-label'), '子类目', false);
             setLabel(document.getElementById('ld-owner-label'), '往来单位', false);
