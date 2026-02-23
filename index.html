@@ -1260,9 +1260,18 @@
           if (!r.ok) return;
           const data = await r.json();
           const items = Array.isArray(data.items) ? data.items : [];
-          records.splice(0, records.length, ...items.map(x => ({
-            type:x.type, category:x.category, doc:x.doc, client:x.client, amount:Number(x.amount||0), method:x.method, file:x.file||'', notes:x.notes||'', date:x.date||'', dateTime:x.date_time||'', createdAt:x.created_at||0, entry:'接口', createdBy:x.created_by||''
-          })));
+          if (items.length > 0) {
+            const arr = items.map(x => ({
+              type:x.type, category:x.category, doc:x.doc, client:x.client, amount:Number(x.amount||0), method:x.method, file:x.file||'', notes:x.notes||'', date:x.date||'', dateTime:x.date_time||'', createdAt:x.created_at||0, entry:'接口', createdBy:x.created_by||''
+            }));
+            records.splice(0, records.length, ...arr);
+            saveJSON('records', records);
+          } else {
+            const local = loadJSON('records', []);
+            if (Array.isArray(local) && local.length && records.length === 0) {
+              records.splice(0, records.length, ...local);
+            }
+          }
         } catch {}
       }
       function initPersist() {
