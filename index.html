@@ -1120,6 +1120,18 @@
       const filterKey = document.getElementById('filter-key');
       try { filterKey?.setAttribute('autocomplete','off'); } catch {}
       window.addEventListener('pageshow', () => { try { const el = document.getElementById('filter-key'); if (el) el.value=''; } catch {} });
+      function clearLedgerKeyword() {
+        const el = document.getElementById('filter-key');
+        if (!el) return;
+        el.value = '';
+        try { el.dispatchEvent(new Event('input')); } catch {}
+        setTimeout(() => {
+          if (el.value) {
+            el.value = '';
+            try { el.dispatchEvent(new Event('input')); } catch {}
+          }
+        }, 200);
+      }
       const filterStart = document.getElementById('filter-start');
       const filterEnd = document.getElementById('filter-end');
       const ledgerPager = document.getElementById('global-pager-controls') || document.getElementById('ledger-pager');
@@ -1260,17 +1272,23 @@
           if (!r.ok) return;
           const data = await r.json();
           const items = Array.isArray(data.items) ? data.items : [];
-          if (items.length > 0) {
-            const arr = items.map(x => ({
-              type:x.type, category:x.category, doc:x.doc, client:x.client, amount:Number(x.amount||0), method:x.method, file:x.file||'', notes:x.notes||'', date:x.date||'', dateTime:x.date_time||'', createdAt:x.created_at||0, entry:'接口', createdBy:x.created_by||''
-            }));
-            records.splice(0, records.length, ...arr);
+          const serverArr = items.map(x => ({
+            type:x.type, category:x.category, doc:x.doc, client:x.client, amount:Number(x.amount||0), method:x.method, file:x.file||'', notes:x.notes||'', date:x.date||'', dateTime:x.date_time||'', createdAt:x.created_at||0, entry:'接口', createdBy:x.created_by||''
+          }));
+          const localArr = loadJSON('records', []);
+          const merged = [];
+          const keyOf = (r) => [r.type||'', r.doc||'', r.client||'', String(r.amount||0), r.date||''].join('|');
+          const seen = new Set();
+          serverArr.forEach(r => { const k = keyOf(r); if (!seen.has(k)) { merged.push(r); seen.add(k); } });
+          if (Array.isArray(localArr)) {
+            localArr.forEach(r => { const k = keyOf(r); if (!seen.has(k)) { merged.push(r); seen.add(k); } });
+          }
+          if (merged.length > 0) {
+            records.splice(0, records.length, ...merged);
             saveJSON('records', records);
           } else {
-            const local = loadJSON('records', []);
-            if (Array.isArray(local) && local.length && records.length === 0) {
-              records.splice(0, records.length, ...local);
-            }
+            const local = Array.isArray(localArr) ? localArr : [];
+            if (local.length && records.length === 0) records.splice(0, records.length, ...local);
           }
         } catch {}
       }
@@ -3919,7 +3937,7 @@
             ledgerHdrType = 'all';
             ledgerHdrCat = '';
             ledgerHdrOwner = '';
-            if (filterKey) filterKey.value = '';
+            clearLedgerKeyword();
             ledgerPage = 1;
             applyFilters();
             setLabel(document.getElementById('ld-type-label'), '类型', false);
