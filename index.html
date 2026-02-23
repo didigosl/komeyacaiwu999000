@@ -3903,9 +3903,11 @@
               if (r.ok) {
                 const data = await r.json();
                 const items = Array.isArray(data.items) ? data.items : [];
-                payRecords.splice(0, payRecords.length, ...items.map(x => ({
-                  id:x.id, type:x.type, partner:x.partner, doc:x.doc, amount:Number(x.amount||0), paid:Number(x.paid||0), settled:!!x.settled, trustDays:x.trust_days||30, notes:x.notes||'', invoiceNo:x.invoice_no||'', invoiceDate:x.invoice_date||'', invoiceAmount:Number(x.invoice_amount||0), createdAt:x.created_at||0, history: Array.isArray(x.history)?x.history:[]
-                })));
+                if (items.length > 0) {
+                  payRecords.splice(0, payRecords.length, ...items.map(x => ({
+                    id:x.id, type:x.type, partner:x.partner, doc:x.doc, amount:Number(x.amount||0), paid:Number(x.paid||0), settled:!!x.settled, trustDays:x.trust_days||30, notes:x.notes||'', invoiceNo:x.invoice_no||'', invoiceDate:x.invoice_date||'', invoiceAmount:Number(x.invoice_amount||0), createdAt:x.created_at||0, history: Array.isArray(x.history)?x.history:[]
+                  })));
+                }
               }
             } catch {}
             renderPayables();
