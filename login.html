@@ -51,7 +51,7 @@
           </div>
           <div style="display:flex; align-items:center; gap:8px">
             <input id="login-default" type="checkbox" style="width:auto">
-            <span class="label">设为此电脑默认帐号</span>
+            <span class="label">记住密码</span>
           </div>
           <button id="login-submit" class="btn" type="submit">登录</button>
           <div id="login-error" class="error">账号或密码错误</div>
@@ -81,8 +81,8 @@
         }
         const names = ['aaaaaa', ...users.map(x => x.name).filter(Boolean).filter((n, i, a) => a.indexOf(n) === i && n!=='aaaaaa')];
         userList.innerHTML = '';
-        const d = localStorage.getItem('defaultLoginUser');
-        selectedUser = (d && names.includes(d)) ? d : names[0] || '';
+        selectedUser = names[0] || '';
+        const saved = getPwdMap();
         names.forEach(name => {
           const chip = document.createElement('div');
           chip.className = 'user-chip' + (name===selectedUser ? ' active' : '');
@@ -91,9 +91,11 @@
             selectedUser = name;
             [...userList.children].forEach(el => el.classList.remove('active'));
             chip.classList.add('active');
+            p.value = saved[name] || '';
           });
           userList.appendChild(chip);
         });
+        p.value = saved[selectedUser] || '';
       })();
       form.addEventListener('submit', e => {
         e.preventDefault();
@@ -105,7 +107,9 @@
             const r = await fetch('/api/auth/login', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name, password: pass }) });
             if (r.ok) {
               const data = await r.json();
-              if (def.checked && name) localStorage.setItem('defaultLoginUser', name);
+              if (def.checked && name && pass) {
+                const m = getPwdMap(); m[name] = pass; localStorage.setItem('userPasswords', JSON.stringify(m));
+              }
               setAuthUser({ name, token: data.token });
               location.href = './index.html#ledger';
               return;
@@ -116,7 +120,10 @@
           if (name === 'aaaaaa' && pass === '999000') ok = true;
           else if (map[name] && pass === map[name]) ok = true;
           if (!ok) { err.style.display = 'block'; return; }
-          if (def.checked && name) localStorage.setItem('defaultLoginUser', name);
+          if (def.checked && name && pass) {
+            map[name] = pass;
+            localStorage.setItem('userPasswords', JSON.stringify(map));
+          }
           setAuthUser({ name });
           location.href = './index.html#ledger';
         })();
