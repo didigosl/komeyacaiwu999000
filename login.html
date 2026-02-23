@@ -26,6 +26,9 @@
       .tip { margin-top:10px; font-size:13px; color: var(--muted); }
       .error { margin-top:8px; padding:8px 10px; border:1px solid #fecaca; background:#fff1f2; color:#ef4444; border-radius:8px; display:none; }
       .footer { margin-top:20px; color:#93c5fd; text-align:center; font-size:12px; }
+      .user-list { display:flex; gap:8px; flex-wrap:wrap; }
+      .user-chip { padding:10px 12px; border:1px solid var(--line); border-radius:10px; cursor:pointer; background:#fff; }
+      .user-chip.active { border-color: var(--blue); box-shadow:0 0 0 3px rgba(37,99,235,0.12); }
     </style>
   </head>
   <body>
@@ -43,7 +46,7 @@
         <form id="login-form" class="form">
           <div>
             <div class="label">账号</div>
-            <select id="login-user"></select>
+            <div id="login-users" class="user-list"></div>
           </div>
           <div>
             <div class="label">密码</div>
@@ -62,13 +65,14 @@
     </div>
     <script>
       const form = document.getElementById('login-form');
-      const u = document.getElementById('login-user');
+      const userList = document.getElementById('login-users');
       const p = document.getElementById('login-pass');
       const err = document.getElementById('login-error');
       const def = document.getElementById('login-default');
       function loadJSON(key, fallback) { try { return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback)); } catch { return fallback; } }
       function setAuthUser(user) { if (user) localStorage.setItem('authUser', JSON.stringify(user)); else localStorage.removeItem('authUser'); }
       function getPwdMap() { try { return JSON.parse(localStorage.getItem('userPasswords') || '{}'); } catch { return {}; } }
+      let selectedUser = '';
       (function fillUsers(){
         let users = loadJSON('userAccounts', []);
         if (!Array.isArray(users) || users.length === 0 || !users.some(u => u && u.name)) {
@@ -80,14 +84,24 @@
           const map = getPwdMap(); map['shuangqun'] = map['shuangqun'] || '111111'; localStorage.setItem('userPasswords', JSON.stringify(map));
         }
         const names = ['aaaaaa', ...users.map(x => x.name).filter(Boolean).filter((n, i, a) => a.indexOf(n) === i && n!=='aaaaaa')];
-        u.innerHTML = '';
-        names.forEach(name => { const opt = document.createElement('option'); opt.value = name; opt.textContent = name; u.appendChild(opt); });
+        userList.innerHTML = '';
         const d = localStorage.getItem('defaultLoginUser');
-        if (d && names.includes(d)) u.value = d;
+        selectedUser = (d && names.includes(d)) ? d : names[0] || '';
+        names.forEach(name => {
+          const chip = document.createElement('div');
+          chip.className = 'user-chip' + (name===selectedUser ? ' active' : '');
+          chip.textContent = name;
+          chip.addEventListener('click', () => {
+            selectedUser = name;
+            [...userList.children].forEach(el => el.classList.remove('active'));
+            chip.classList.add('active');
+          });
+          userList.appendChild(chip);
+        });
       })();
       form.addEventListener('submit', e => {
         e.preventDefault();
-        const name = (u.value || '').trim();
+        const name = (selectedUser || '').trim();
         const pass = p.value || '';
         (async () => {
           err.style.display = 'none';
