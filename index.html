@@ -1920,6 +1920,18 @@
       try { payFilterKey?.setAttribute('autocomplete','off'); } catch {}
       try { payFilterKey && (payFilterKey.value = ''); } catch {}
       window.addEventListener('pageshow', () => { try { const el = document.getElementById('pay-filter-key'); if (el) el.value=''; } catch {} });
+      function clearPayKeyword() {
+        const el = document.getElementById('pay-filter-key');
+        if (!el) return;
+        el.value = '';
+        try { el.dispatchEvent(new Event('input')); } catch {}
+        setTimeout(() => {
+          if (el.value) {
+            el.value = '';
+            try { el.dispatchEvent(new Event('input')); } catch {}
+          }
+        }, 200);
+      }
       const payExportBtn = document.getElementById('pay-export');
       const payClearBtn = document.getElementById('pay-clear');
       let payLastPageData = [];
@@ -3931,6 +3943,7 @@
             setDefault();
           } catch {}
           (async () => {
+            clearPayKeyword();
             try {
               const r = await apiFetchAuth('/payables?page=1&pageSize=1000', { method:'GET' });
               if (r.ok) {
