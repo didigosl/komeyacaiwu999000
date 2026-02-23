@@ -3954,6 +3954,9 @@
                 }
               }
             } catch {}
+            const payFilterKey = document.getElementById('pay-filter-key');
+            if (payFilterKey) { payFilterKey.value = ''; }
+            payPage = 1;
             renderPayables();
           })();
         } else if (hash === '#contacts') {
