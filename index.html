@@ -977,7 +977,7 @@
               <div class="modal-body">
                 <div class="grid6">
                   <input id="u-name" type="text" placeholder="账号">
-                  <input id="u-role" type="text" placeholder="角色">
+                  <select id="u-role"></select>
                 </div>
               </div>
               <div class="modal-actions">
@@ -1340,6 +1340,13 @@
         saveJSON('rolesData', rolesData);
         const users = loadJSON('userAccounts', null);
         if (Array.isArray(users)) { userAccounts.splice(0, userAccounts.length, ...users); }
+        if (!userAccounts.some(u => u && u.name === 'caiwu')) {
+          const maxId = userAccounts.reduce((m,u)=>Math.max(m, u.id||0), 0);
+          const now = new Date();
+          const created = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+          userAccounts.push({ id:maxId+1, name:'caiwu', role:'财务', created, enabled:true, password:'111111' });
+          saveJSON('userAccounts', userAccounts);
+        }
         const sales = loadJSON('salesData', null);
         if (Array.isArray(sales)) { salesData.splice(0, salesData.length, ...sales); }
       }
@@ -3502,12 +3509,9 @@
       const userAccounts = [
         { id:2, name:'shuangqun', role:'股东', created:'2022-02-02 10:31:22', enabled:true },
         { id:1, name:'aaaaaa', role:'超级管理员', created:'2022-01-29 07:40:15', enabled:true, password:'999000' },
+        { id:3, name:'caiwu', role:'财务', created:'2026-02-24 00:00:00', enabled:true }
       ];
-      (function syncInitialPasswords(){
-        const m = getPwdMap();
-        userAccounts.forEach(u => { if (u.password) m[u.name] = u.password; });
-        setPwdMap(m);
-      })();
+      // 移除自动写入本地密码的逻辑，改为仅在“记住密码”或“重置密码/修改密码”时写入
       let userPage = 1;
       function renderUserAccounts() {
         const key = (userSearch?.value || '').trim();
@@ -3549,10 +3553,16 @@
           tr.appendChild(tdRole);
           const tdCreated = document.createElement('td'); tdCreated.textContent = u.created || ''; tr.appendChild(tdCreated);
           const tdStatus = document.createElement('td');
-          const sw = document.createElement('div'); sw.className = 'switch' + (u.enabled ? '' : ' off');
-          const btn = document.createElement('button'); btn.textContent = u.enabled ? 'ON' : 'OFF';
-          btn.addEventListener('click', () => { u.enabled = !u.enabled; renderUserAccounts(); saveJSON('userAccounts', userAccounts); });
-          sw.appendChild(btn); tdStatus.appendChild(sw); tr.appendChild(tdStatus);
+          if (u.name === 'aaaaaa') {
+            const tip = document.createElement('span'); tip.className='tag'; tip.textContent='始终可用';
+            tdStatus.appendChild(tip);
+          } else {
+            const sw = document.createElement('div'); sw.className = 'switch' + (u.enabled ? '' : ' off');
+            const btn = document.createElement('button'); btn.textContent = u.enabled ? 'ON' : 'OFF';
+            btn.addEventListener('click', () => { u.enabled = !u.enabled; renderUserAccounts(); saveJSON('userAccounts', userAccounts); });
+            sw.appendChild(btn); tdStatus.appendChild(sw);
+          }
+          tr.appendChild(tdStatus);
           const tdOps = document.createElement('td');
           const reset = document.createElement('a'); reset.href='#'; reset.textContent='重置密码'; reset.className='link-blue';
           reset.addEventListener('click', e => {
@@ -3576,7 +3586,22 @@
         const totalPages = Math.max(1, Math.ceil(userAccounts.filter(u => (userSearch?.value||'') ? [u.name,u.role,String(u.id)].some(v => v.includes(userSearch.value)) : true).length/size));
         if (userPage < totalPages) { userPage++; renderUserAccounts(); }
       });
-      userCreate?.addEventListener('click', () => { userModal.style.display = 'flex'; document.getElementById('u-name').value=''; document.getElementById('u-role').value=''; });
+      userCreate?.addEventListener('click', () => {
+        userModal.style.display = 'flex';
+        const nameEl = document.getElementById('u-name');
+        const roleSel = document.getElementById('u-role');
+        if (nameEl) nameEl.value = '';
+        if (roleSel) {
+          roleSel.innerHTML = '';
+          rolesData.forEach(r => {
+            const opt = document.createElement('option');
+            opt.value = r.name;
+            opt.textContent = r.name;
+            roleSel.appendChild(opt);
+          });
+          roleSel.value = rolesData.find(r => r.name !== '超级管理员')?.name || (rolesData[0]?.name || '');
+        }
+      });
       userCancel?.addEventListener('click', () => { userModal.style.display = 'none'; });
       userForm?.addEventListener('submit', e => {
         e.preventDefault();
@@ -3586,7 +3611,7 @@
         const maxId = userAccounts.reduce((m,u)=>Math.max(m,u.id),0);
         const now = new Date();
         const created = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
-        userAccounts.push({ id:maxId+1, name, role, created, enabled:true });
+        userAccounts.push({ id:maxId+1, name, role, created, enabled:true, password:'111111' });
         userModal.style.display = 'none';
         userPage = 1;
         renderUserAccounts();

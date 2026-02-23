@@ -76,9 +76,16 @@
             { id:2, name:'shuangqun', role:'股东', created:'2022-02-02 10:31:22', enabled:true },
             { id:1, name:'aaaaaa', role:'超级管理员', created:'2022-01-29 07:40:15', enabled:true }
           ];
-          localStorage.setItem('userAccounts', JSON.stringify(users));
         }
-        const names = ['aaaaaa', ...users.map(x => x.name).filter(Boolean).filter((n, i, a) => a.indexOf(n) === i && n!=='aaaaaa')];
+        if (!users.some(u => u && u.name==='caiwu')) {
+          const maxId = users.reduce((m,u)=>Math.max(m, u?.id||0), 0);
+          const now = new Date();
+          const created = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
+          users.push({ id:maxId+1, name:'caiwu', role:'财务', created, enabled:true, password:'111111' });
+        }
+        localStorage.setItem('userAccounts', JSON.stringify(users));
+        const enabledUsers = (Array.isArray(users)?users:[]).filter(u => (u?.enabled!==false) || u.name==='aaaaaa');
+        const names = ['aaaaaa', ...enabledUsers.map(x => x.name).filter(Boolean).filter((n, i, a) => a.indexOf(n) === i && n!=='aaaaaa')];
         userList.innerHTML = '';
         selectedUser = names[0] || '';
         const saved = getPwdMap();
@@ -119,8 +126,13 @@
           } catch {}
           let ok = false;
           const map = getPwdMap();
+          const users = loadJSON('userAccounts', []);
           if (name === 'aaaaaa' && pass === '999000') ok = true;
           else if (map[name] && pass === map[name]) ok = true;
+          else {
+            const u = users.find(x => x.name === name);
+            if (u && u.password && pass === u.password) ok = true;
+          }
           if (!ok) { err.style.display = 'block'; return; }
           if (def.checked && name && pass) { map[name] = pass; }
           else { delete map[name]; }
