@@ -3907,6 +3907,28 @@
                   payRecords.splice(0, payRecords.length, ...items.map(x => ({
                     id:x.id, type:x.type, partner:x.partner, doc:x.doc, amount:Number(x.amount||0), paid:Number(x.paid||0), settled:!!x.settled, trustDays:x.trust_days||30, notes:x.notes||'', invoiceNo:x.invoice_no||'', invoiceDate:x.invoice_date||'', invoiceAmount:Number(x.invoice_amount||0), createdAt:x.created_at||0, history: Array.isArray(x.history)?x.history:[]
                   })));
+                  saveJSON('payRecords', payRecords);
+                } else {
+                  const needPost = (payRecords || []).filter(rec => !rec.id && (rec.source==='import' || rec.source==='manual'));
+                  for (const rec of needPost) {
+                    try {
+                      const body = JSON.stringify({
+                        type: rec.type, partner: rec.partner, doc: rec.doc,
+                        amount: Number(rec.amount||0),
+                        trustDays: Number(rec.trustDays||30),
+                        notes: rec.notes || '',
+                        invoiceNo: rec.invoiceNo || '',
+                        invoiceDate: rec.invoiceDate || '',
+                        invoiceAmount: Number(rec.invoiceAmount||0)
+                      });
+                      const p = await apiFetch('/payables', { method:'POST', headers:{'Content-Type':'application/json'}, body });
+                      if (p && p.ok) {
+                        const d = await p.json();
+                        if (d && d.id) rec.id = d.id;
+                      }
+                    } catch {}
+                  }
+                  saveJSON('payRecords', payRecords);
                 }
               }
             } catch {}
