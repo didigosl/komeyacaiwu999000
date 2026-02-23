@@ -518,7 +518,7 @@
                 <div class="summary-item">应付总额 <span id="sum-pay">0.00</span></div>
                 <div class="field" style="margin-left:auto; min-width:320px; display:flex; align-items:center; gap:8px;">
                   <span class="label">关键词</span>
-                  <input id="pay-filter-key" type="text" placeholder="搜索关键词">
+                  <input id="pay-filter-key" type="text" placeholder="搜索关键词" autocomplete="off" autocapitalize="none" autocorrect="off" inputmode="search" name="payFilter">
                 </div>
                 <button id="pay-export" class="btn" style="margin-left:8px; display:flex; align-items:center; gap:6px">
                   <span style="display:inline-block; width:14px; height:14px; background:#22c55e; border-radius:3px"></span>
@@ -1917,6 +1917,9 @@
       const sumRecvEl = document.getElementById('sum-recv');
       const sumPayEl = document.getElementById('sum-pay');
       const payFilterKey = document.getElementById('pay-filter-key');
+      try { payFilterKey?.setAttribute('autocomplete','off'); } catch {}
+      try { payFilterKey && (payFilterKey.value = ''); } catch {}
+      window.addEventListener('pageshow', () => { try { const el = document.getElementById('pay-filter-key'); if (el) el.value=''; } catch {} });
       const payExportBtn = document.getElementById('pay-export');
       const payClearBtn = document.getElementById('pay-clear');
       let payLastPageData = [];
