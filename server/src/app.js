@@ -123,6 +123,27 @@ async function ensureSchema() {
   await query('alter table contacts add column if not exists sales text', []);
   await query("update contacts set owner='客户' where owner is null or owner=''", []);
   await query('create unique index if not exists uniq_contacts_owner_name on contacts(owner, name)', []);
+  await query('alter table payables add column if not exists paid numeric default 0', []);
+  await query('alter table payables add column if not exists settled boolean default false', []);
+  await query('alter table payables add column if not exists trust_days int default 30', []);
+  await query('alter table payables add column if not exists notes text', []);
+  await query('alter table payables add column if not exists invoice_no text', []);
+  await query('alter table payables add column if not exists invoice_date text', []);
+  await query('alter table payables add column if not exists invoice_amount numeric', []);
+  await query('alter table payables add column if not exists sales text', []);
+  await query('alter table payables add column if not exists date text', []);
+  await query('alter table payables add column if not exists created_at bigint', []);
+  await query('alter table payables add column if not exists batch_at bigint', []);
+  await query('alter table payables add column if not exists batch_order int', []);
+  await query('alter table payables add column if not exists source text', []);
+  await query('alter table payables add column if not exists history jsonb default \'[]\'::jsonb', []);
+  await query('update payables set paid=0 where paid is null', []);
+  await query('update payables set settled=false where settled is null', []);
+  await query('update payables set trust_days=30 where trust_days is null', []);
+  await query('update payables set created_at=extract(epoch from now())*1000 where created_at is null', []);
+  await query('update payables set batch_at=created_at where batch_at is null', []);
+  await query('update payables set batch_order=0 where batch_order is null', []);
+  await query('update payables set source=\'import\' where source is null or source=\'\'', []);
 }
 // Ensure schema then defaults sequentially to avoid race
 (async () => {
