@@ -113,6 +113,34 @@ async function ensureSchema() {
   await query('alter table users add column if not exists password text', []);
   await query('alter table users add column if not exists password_hash text', []);
   await query('alter table users alter column password_hash drop not null', []);
+  await query('alter table roles add column if not exists description text', []);
+  await query('alter table roles add column if not exists created text', []);
+  await query('alter table roles add column if not exists immutable boolean default false', []);
+  await query("alter table roles add column if not exists perms jsonb default '{}'::jsonb", []);
+  await query("update roles set perms='{}'::jsonb where perms is null", []);
+  await query('update roles set immutable=false where immutable is null', []);
+  await query('alter table accounts add column if not exists description text', []);
+  await query('alter table accounts add column if not exists created text', []);
+  await query('alter table accounts add column if not exists initial_set boolean default false', []);
+  await query('update accounts set initial_set=false where initial_set is null', []);
+  await query("alter table categories add column if not exists children jsonb default '[]'::jsonb", []);
+  await query("update categories set children='[]'::jsonb where children is null", []);
+  await query('alter table sales add column if not exists region text', []);
+  await query('alter table sales add column if not exists phone text', []);
+  await query('alter table sales add column if not exists base numeric default 0', []);
+  await query('alter table sales add column if not exists rate numeric default 0', []);
+  await query('alter table sales add column if not exists commission numeric default 0', []);
+  await query('alter table sales add column if not exists created text', []);
+  await query('alter table ledger add column if not exists category text', []);
+  await query('alter table ledger add column if not exists doc text', []);
+  await query('alter table ledger add column if not exists client text', []);
+  await query('alter table ledger add column if not exists method text', []);
+  await query('alter table ledger add column if not exists file text', []);
+  await query('alter table ledger add column if not exists notes text', []);
+  await query('alter table ledger add column if not exists date text', []);
+  await query('alter table ledger add column if not exists date_time text', []);
+  await query('alter table ledger add column if not exists created_at bigint', []);
+  await query('alter table ledger add column if not exists created_by text', []);
   await query('alter table contacts add column if not exists owner text', []);
   await query('alter table contacts add column if not exists remark text', []);
   await query('alter table contacts add column if not exists zip text', []);
@@ -279,9 +307,10 @@ function ensureAllow(module, action) {
 // Auth endpoints
 app.post('/api/auth/login', async (req, res) => {
   const { name='', password='' } = req.body || {};
-  const r = await query('select name, role, enabled, password from users where name=$1', [name]);
+  const r = await query('select name, role, enabled, password, password_hash from users where name=$1', [name]);
   const u = r.rows[0];
-  if (!u || !u.enabled || String(u.password||'') !== String(password||'')) return res.status(401).json({ error:'bad_credentials' });
+  const stored = (u?.password && String(u.password)) || (u?.password_hash && String(u.password_hash)) || '';
+  if (!u || !u.enabled || stored !== String(password||'')) return res.status(401).json({ error:'bad_credentials' });
   const token = signJwt({ name: u.name, role: u.role||'' }, 24*3600);
   res.json({ token, user: { name: u.name, role: u.role||'' } });
 });
@@ -592,8 +621,9 @@ app.get('/api/users', authRequired, ensureAllow('user_accounts','view'), async (
 });
 app.post('/api/users', authRequired, ensureAllow('user_accounts','create_user'), async (req, res) => {
   const x = req.body || {};
-  const r = await query('insert into users(name, role, created, enabled, password) values($1,$2,$3,true,$4) returning id',
-    [x.name||'', x.role||'', x.created||'', x.password||'']);
+  const pwd = x.password || '';
+  const r = await query('insert into users(name, role, created, enabled, password, password_hash) values($1,$2,$3,true,$4,$5) returning id',
+    [x.name||'', x.role||'', x.created||'', pwd, pwd]);
   res.json({ id: r.rows[0].id });
 });
 app.put('/api/users/:id', authRequired, ensureAllow('user_accounts','enable_user'), async (req, res) => {
@@ -605,7 +635,7 @@ app.put('/api/users/:id', authRequired, ensureAllow('user_accounts','enable_user
 app.post('/api/users/:id/reset-password', authRequired, ensureAllow('user_accounts','reset_password'), async (req, res) => {
   const id = parseInt(req.params.id, 10) || 0;
   const { password = '111111' } = req.body || {};
-  await query('update users set password=$1 where id=$2', [password, id]);
+  await query('update users set password=$1, password_hash=$1 where id=$2', [password, id]);
   res.json({ ok: true });
 });
 app.get('/api/analytics/ledger-summary', authRequired, ensureAllow('ledger','view'), async (req, res) => {
