@@ -69,7 +69,6 @@ async function ensureSchema() {
       zip text,
       sales text
     );
-    create unique index if not exists uniq_contacts_owner_name on contacts(owner, name);
     create table if not exists accounts (
       id serial primary key,
       name text not null unique,
@@ -112,6 +111,16 @@ async function ensureSchema() {
   await query('alter table users add column if not exists created text', []);
   await query('alter table users add column if not exists enabled boolean default true', []);
   await query('alter table users add column if not exists password text', []);
+  await query('alter table contacts add column if not exists owner text', []);
+  await query('alter table contacts add column if not exists remark text', []);
+  await query('alter table contacts add column if not exists zip text', []);
+  await query('alter table contacts add column if not exists company text', []);
+  await query('alter table contacts add column if not exists code text', []);
+  await query('alter table contacts add column if not exists country text', []);
+  await query('alter table contacts add column if not exists address text', []);
+  await query('alter table contacts add column if not exists sales text', []);
+  await query("update contacts set owner='客户' where owner is null or owner=''", []);
+  await query('create unique index if not exists uniq_contacts_owner_name on contacts(owner, name)', []);
 }
 // Ensure schema then defaults sequentially to avoid race
 (async () => {
