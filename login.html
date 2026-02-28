@@ -20,15 +20,15 @@
       .sub { color: var(--muted); margin-top:4px; }
       .form { margin-top:24px; display:flex; flex-direction:column; gap:14px; }
       .label { font-size:13px; color: var(--muted); }
-      input, select { width:100%; padding:12px 14px; border:1px solid var(--line); border-radius:10px; outline:none; font-size:15px; background:#fff; }
-      input:focus, select:focus { border-color: var(--blue); box-shadow:0 0 0 3px rgba(37,99,235,0.12); }
+      input { width:100%; padding:12px 14px; border:1px solid var(--line); border-radius:10px; outline:none; font-size:15px; }
+      input:focus { border-color: var(--blue); box-shadow:0 0 0 3px rgba(37,99,235,0.12); }
+      .chips { display:flex; gap:10px; flex-wrap:wrap; margin-top:8px; }
+      .chip { display:inline-flex; align-items:center; padding:8px 12px; border:1px solid var(--line); border-radius:999px; cursor:pointer; background:#fff; color:#0f172a; }
+      .chip.active { border-color: var(--blue); box-shadow:0 0 0 3px rgba(37,99,235,0.12); }
       .btn { width:100%; padding:12px 14px; border:none; border-radius:10px; background: var(--blue); color:#fff; font-weight:600; cursor:pointer; }
       .tip { margin-top:10px; font-size:13px; color: var(--muted); }
       .error { margin-top:8px; padding:8px 10px; border:1px solid #fecaca; background:#fff1f2; color:#ef4444; border-radius:8px; display:none; }
       .footer { margin-top:20px; color:#93c5fd; text-align:center; font-size:12px; }
-      .user-list { display:flex; gap:8px; flex-wrap:wrap; }
-      .user-chip { padding:10px 12px; border:1px solid var(--line); border-radius:10px; cursor:pointer; background:#fff; }
-      .user-chip.active { border-color: var(--blue); box-shadow:0 0 0 3px rgba(37,99,235,0.12); }
     </style>
   </head>
   <body>
@@ -42,16 +42,15 @@
       </div>
       <div class="right">
         <div class="brand">KOMEYA 财务管理</div>
+        <div class="sub">欢迎登录</div>
         <form id="login-form" class="form">
           <div>
-            <div id="login-users" class="user-list"></div>
+            <div class="label">账号</div>
+            <div id="login-chips" class="chips"></div>
           </div>
           <div>
+            <div class="label">密码</div>
             <input id="login-pass" type="password" placeholder="请输入密码">
-          </div>
-          <div style="display:flex; align-items:center; gap:8px">
-            <input id="login-default" type="checkbox" style="width:auto">
-            <span class="label">记住密码</span>
           </div>
           <button id="login-submit" class="btn" type="submit">登录</button>
           <div id="login-error" class="error">账号或密码错误</div>
@@ -61,85 +60,40 @@
     </div>
     <script>
       const form = document.getElementById('login-form');
-      const userList = document.getElementById('login-users');
+      const chips = document.getElementById('login-chips');
       const p = document.getElementById('login-pass');
       const err = document.getElementById('login-error');
-      const def = document.getElementById('login-default');
-      function loadJSON(key, fallback) { try { return JSON.parse(localStorage.getItem(key) || JSON.stringify(fallback)); } catch { return fallback; } }
+      const API_BASE = (location.hostname === 'localhost' ? 'http://localhost:5001' : '');
       function setAuthUser(user) { if (user) localStorage.setItem('authUser', JSON.stringify(user)); else localStorage.removeItem('authUser'); }
-      function getPwdMap() { try { return JSON.parse(localStorage.getItem('userPasswords') || '{}'); } catch { return {}; } }
-      let selectedUser = '';
+      let selectedName = '';
       (function fillUsers(){
-        let users = loadJSON('userAccounts', []);
-        if (!Array.isArray(users) || users.length === 0 || !users.some(u => u && u.name)) {
-          users = [
-            { id:2, name:'shuangqun', role:'股东', created:'2022-02-02 10:31:22', enabled:true },
-            { id:1, name:'aaaaaa', role:'超级管理员', created:'2022-01-29 07:40:15', enabled:true }
-          ];
-        }
-        if (!users.some(u => u && u.name==='caiwu')) {
-          const maxId = users.reduce((m,u)=>Math.max(m, u?.id||0), 0);
-          const now = new Date();
-          const created = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
-          users.push({ id:maxId+1, name:'caiwu', role:'财务', created, enabled:true, password:'111111' });
-        }
-        localStorage.setItem('userAccounts', JSON.stringify(users));
-        const enabledUsers = (Array.isArray(users)?users:[]).filter(u => (u?.enabled!==false) || u.name==='aaaaaa');
-        const names = ['aaaaaa', ...enabledUsers.map(x => x.name).filter(Boolean).filter((n, i, a) => a.indexOf(n) === i && n!=='aaaaaa')];
-        userList.innerHTML = '';
-        selectedUser = names[0] || '';
-        const saved = getPwdMap();
-        names.forEach(name => {
-          const chip = document.createElement('div');
-          chip.className = 'user-chip' + (name===selectedUser ? ' active' : '');
-          chip.textContent = name;
-          chip.addEventListener('click', () => {
-            selectedUser = name;
-            [...userList.children].forEach(el => el.classList.remove('active'));
-            chip.classList.add('active');
-            p.value = saved[name] || '';
-            def.checked = !!saved[name];
-          });
-          userList.appendChild(chip);
+        const users = (function(){ try { return JSON.parse(localStorage.getItem('userAccounts')||'[]'); } catch { return []; } })();
+        const names = ['aaaaaa','shuangqun','caiwu', ...users.map(x=>x.name).filter(Boolean)];
+        const uniq = Array.from(new Set(names));
+        chips.innerHTML = '';
+        uniq.forEach(n => {
+          const c = document.createElement('button'); c.type='button'; c.className='chip'; c.textContent=n;
+          c.addEventListener('click', () => { selectedName = n; [...chips.querySelectorAll('.chip')].forEach(x => x.classList.toggle('active', x===c)); });
+          chips.appendChild(c);
         });
-        p.value = saved[selectedUser] || '';
-        def.checked = !!saved[selectedUser];
+        selectedName = 'aaaaaa';
+        const btn = [...chips.querySelectorAll('.chip')].find(x => x.textContent==='aaaaaa'); if (btn) btn.classList.add('active');
       })();
-      form.addEventListener('submit', e => {
+      form.addEventListener('submit', async e => {
         e.preventDefault();
-        const name = (selectedUser || '').trim();
+        const name = (selectedName || '').trim();
         const pass = p.value || '';
-        (async () => {
+        let authData = null;
+        try {
+          const r = await fetch(API_BASE + '/api/auth/login', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name, password: pass }) });
+          if (!r.ok) { err.style.display = 'block'; return; }
+          authData = await r.json();
+          if (!authData || !authData.token || !authData.user) { err.style.display = 'block'; return; }
+          localStorage.setItem('authToken', authData.token);
           err.style.display = 'none';
-          try {
-            const r = await fetch('/api/auth/login', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name, password: pass }) });
-            if (r.ok) {
-              const data = await r.json();
-              const m = getPwdMap();
-              if (def.checked && name && pass) { m[name] = pass; }
-              else { delete m[name]; }
-              localStorage.setItem('userPasswords', JSON.stringify(m));
-              setAuthUser({ name, token: data.token });
-              location.href = './index.html#ledger';
-              return;
-            }
-          } catch {}
-          let ok = false;
-          const map = getPwdMap();
-          const users = loadJSON('userAccounts', []);
-          if (name === 'aaaaaa' && pass === '999000') ok = true;
-          else if (map[name] && pass === map[name]) ok = true;
-          else {
-            const u = users.find(x => x.name === name);
-            if (u && u.password && pass === u.password) ok = true;
-          }
-          if (!ok) { err.style.display = 'block'; return; }
-          if (def.checked && name && pass) { map[name] = pass; }
-          else { delete map[name]; }
-          localStorage.setItem('userPasswords', JSON.stringify(map));
-          setAuthUser({ name });
-          location.href = './index.html#ledger';
-        })();
+        } catch { err.style.display = 'block'; return; }
+        setAuthUser({ name, role: (authData?.user?.role || '') });
+        location.href = './index.html#ledger';
       });
     </script>
   </body>

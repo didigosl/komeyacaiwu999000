@@ -1,12 +1,20 @@
-const { Pool } = require('pg');
-const pool = new Pool({
-  host: process.env.DB_HOST || 'db',
-  port: Number(process.env.DB_PORT || 5432),
-  user: process.env.DB_USER || 'postgres',
-  password: process.env.DB_PASSWORD || 'postgres',
-  database: process.env.DB_NAME || 'komeya',
+import pg from 'pg';
+
+const { Pool } = pg;
+
+const DATABASE_URL = process.env.DATABASE_URL || 'postgres://postgres@localhost:5432/komeya';
+
+export const pool = new Pool({
+  connectionString: DATABASE_URL,
+  max: 10
 });
-module.exports = {
-  query: (text, params) => pool.query(text, params),
-  pool,
-};
+
+export async function query(sql, params = []) {
+  const client = await pool.connect();
+  try {
+    const res = await client.query(sql, params);
+    return res;
+  } finally {
+    client.release();
+  }
+}
