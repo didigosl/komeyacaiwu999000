@@ -72,7 +72,7 @@
       const err = document.getElementById('login-error');
       const def = document.getElementById('login-default');
       const sel = document.getElementById('login-selected');
-      const API_BASE = (location.hostname === 'localhost' ? 'http://localhost:5001' : '');
+      const API_BASE = ((location.hostname === 'localhost') && location.port && location.port !== '80' && location.port !== '443') ? 'http://localhost:5001' : '';
       function setAuthUser(user) { if (user) localStorage.setItem('authUser', JSON.stringify(user)); else localStorage.removeItem('authUser'); }
       function setSelected(name) {
         selectedName = name || '';
