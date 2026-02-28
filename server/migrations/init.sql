@@ -1,37 +1,41 @@
 create table if not exists users(
   id serial primary key,
   name text unique not null,
-  password_hash text not null,
-  role text not null
+  role text,
+  created text,
+  enabled boolean not null default true,
+  password text
 );
 create table if not exists ledger(
   id serial primary key,
   type text not null,
-  category text not null,
-  doc text not null,
-  client text not null,
-  amount numeric(18,2) not null,
-  method text not null,
+  category text,
+  doc text,
+  client text,
+  amount numeric not null default 0,
+  method text,
   file text,
   notes text,
   date text,
   date_time text,
-  created_at bigint not null,
+  created_at bigint,
   created_by text
 );
 create table if not exists contacts(
   id serial primary key,
-  type text not null,
   name text not null,
-  company text,
-  code text,
   contact text,
   phone text,
   city text,
+  remark text,
+  owner text not null,
+  created text,
+  company text,
+  code text,
   country text,
   address text,
-  sales text,
-  created text
+  zip text,
+  sales text
 );
 create table if not exists payables(
   id serial primary key,

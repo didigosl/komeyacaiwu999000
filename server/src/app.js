@@ -109,6 +109,9 @@ async function ensureSchema() {
       password text
     );
   `);
+  await query('alter table users add column if not exists created text', []);
+  await query('alter table users add column if not exists enabled boolean default true', []);
+  await query('alter table users add column if not exists password text', []);
 }
 // Ensure schema then defaults sequentially to avoid race
 (async () => {
@@ -160,17 +163,23 @@ async function ensureDefaults() {
     const now = new Date().toISOString().slice(0,19).replace('T',' ');
     await query('insert into users(name, role, created, enabled, password) values($1,$2,$3,true,$4)', ['aaaaaa','超级管理员', now, '999000']);
   }
+  await query("update users set password=$1 where name=$2 and (password is null or password='')", ['999000','aaaaaa']);
+  await query("update users set enabled=true where name=$1 and enabled is null", ['aaaaaa']);
   // Seed default users if missing
   const u2 = await query('select count(*)::int as c from users where name=$1', ['shuangqun']);
   if (u2.rows[0].c === 0) {
     const now = new Date().toISOString().slice(0,19).replace('T',' ');
     await query('insert into users(name, role, created, enabled, password) values($1,$2,$3,true,$4)', ['shuangqun','股东', now, '111111']);
   }
+  await query("update users set password=$1 where name=$2 and (password is null or password='')", ['111111','shuangqun']);
+  await query("update users set enabled=true where name=$1 and enabled is null", ['shuangqun']);
   const u3 = await query('select count(*)::int as c from users where name=$1', ['caiwu']);
   if (u3.rows[0].c === 0) {
     const now = new Date().toISOString().slice(0,19).replace('T',' ');
     await query('insert into users(name, role, created, enabled, password) values($1,$2,$3,true,$4)', ['caiwu','财务', now, '111111']);
   }
+  await query("update users set password=$1 where name=$2 and (password is null or password='')", ['111111','caiwu']);
+  await query("update users set enabled=true where name=$1 and enabled is null", ['caiwu']);
   const c1 = await query('select count(*)::int as c from categories', []);
   if (c1.rows[0].c === 0) {
     const incomeChildren = ['服务收入(现金)','服务收入(银行)','银行储蓄','现金借贷','订单收入','其它收入'];
