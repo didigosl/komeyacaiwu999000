@@ -25,6 +25,8 @@
       .chips { display:flex; gap:10px; flex-wrap:wrap; margin-top:8px; }
       .chip { display:inline-flex; align-items:center; padding:8px 12px; border:1px solid var(--line); border-radius:999px; cursor:pointer; background:#fff; color:#0f172a; }
       .chip.active { border-color: var(--blue); box-shadow:0 0 0 3px rgba(37,99,235,0.12); }
+      .selected { margin-top:8px; font-size:13px; color: var(--muted); }
+      .selected b { color:#0f172a; }
       .btn { width:100%; padding:12px 14px; border:none; border-radius:10px; background: var(--blue); color:#fff; font-weight:600; cursor:pointer; }
       .tip { margin-top:10px; font-size:13px; color: var(--muted); }
       .error { margin-top:8px; padding:8px 10px; border:1px solid #fecaca; background:#fff1f2; color:#ef4444; border-radius:8px; display:none; }
@@ -47,6 +49,7 @@
           <div>
             <div class="label">账号</div>
             <div id="login-chips" class="chips"></div>
+            <div class="selected">已选择账号：<b id="login-selected"></b></div>
           </div>
           <div>
             <div class="label">密码</div>
@@ -68,8 +71,13 @@
       const p = document.getElementById('login-pass');
       const err = document.getElementById('login-error');
       const def = document.getElementById('login-default');
+      const sel = document.getElementById('login-selected');
       const API_BASE = (location.hostname === 'localhost' ? 'http://localhost:5001' : '');
       function setAuthUser(user) { if (user) localStorage.setItem('authUser', JSON.stringify(user)); else localStorage.removeItem('authUser'); }
+      function setSelected(name) {
+        selectedName = name || '';
+        if (sel) sel.textContent = selectedName || '未选择';
+      }
       let selectedName = '';
       (function fillUsers(){
         const users = (function(){ try { return JSON.parse(localStorage.getItem('userAccounts')||'[]'); } catch { return []; } })();
@@ -82,18 +90,20 @@
           c.className='chip';
           c.textContent = n;
           c.addEventListener('click', () => {
-            selectedName = n;
+            setSelected(n);
             [...chips.querySelectorAll('.chip')].forEach(x => x.classList.toggle('active', x===c));
+            err.style.display = 'none';
+            p.value = '';
           });
           chips.appendChild(c);
         });
         const d = localStorage.getItem('defaultLoginUser');
         if (d && uniq.includes(d)) {
-          selectedName = d;
+          setSelected(d);
           const btn = [...chips.querySelectorAll('.chip')].find(x => x.textContent===d);
           if (btn) btn.classList.add('active');
         } else {
-          selectedName = 'aaaaaa';
+          setSelected('aaaaaa');
           const btn = [...chips.querySelectorAll('.chip')].find(x => x.textContent==='aaaaaa');
           if (btn) btn.classList.add('active');
         }
@@ -102,15 +112,16 @@
         e.preventDefault();
         const name = (selectedName || '').trim();
         const pass = p.value || '';
+        if (!name) { err.textContent = '请先选择账号'; err.style.display = 'block'; return; }
         let authData = null;
         try {
           const r = await fetch(API_BASE + '/api/auth/login', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name, password: pass }) });
-          if (!r.ok) { err.style.display = 'block'; return; }
+          if (!r.ok) { err.textContent = `账号或密码错误（当前账号：${name}）`; err.style.display = 'block'; return; }
           authData = await r.json();
-          if (!authData || !authData.token || !authData.user) { err.style.display = 'block'; return; }
+          if (!authData || !authData.token || !authData.user) { err.textContent = `账号或密码错误（当前账号：${name}）`; err.style.display = 'block'; return; }
           localStorage.setItem('authToken', authData.token);
           err.style.display = 'none';
-        } catch { err.style.display = 'block'; return; }
+        } catch { err.textContent = `账号或密码错误（当前账号：${name}）`; err.style.display = 'block'; return; }
         if (def.checked && name) localStorage.setItem('defaultLoginUser', name);
         setAuthUser({ name, role: (authData?.user?.role || '') });
         location.href = './index.html#ledger';
