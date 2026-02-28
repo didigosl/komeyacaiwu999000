@@ -1873,6 +1873,7 @@
             body: JSON.stringify({ type, category, doc, client: clientVal, amount, method, file:'', notes: rec.notes || '', date, dateTime, createdBy: (getAuthUser()?.name || '') })
           });
         } catch {}
+        loadLedgerFromServer();
         // 关联应收/应付账款的付款累积
         if (doc) {
           const targetType = type === '收入' ? '应收账款' : (type === '支出' ? '应付账款' : null);
@@ -3852,6 +3853,32 @@
         if (!r.ok) throw new Error('network_error');
         return await r.json();
       }
+      async function loadLedgerFromServer() {
+        try {
+          const list = await apiFetchJSON('/api/ledger');
+          if (Array.isArray(list)) {
+            records.splice(0, records.length, ...list.map(r => ({
+              type: r.type || '',
+              category: r.category || '',
+              doc: r.doc || '',
+              client: r.client || '',
+              amount: Number(r.amount || 0),
+              method: r.method || '',
+              file: r.file || '',
+              notes: r.notes || '',
+              date: r.date || '',
+              dateTime: r.date_time || '',
+              createdAt: r.created_at || Date.now(),
+              createdBy: r.created_by || '',
+              entry: '手动'
+            })));
+            saveJSON('records', records);
+            applyFilters();
+            const hm = document.getElementById('page-home');
+            if (hm && hm.style.display === 'block') renderHomeChart(homePeriodSel?.value || 'month');
+          }
+        } catch {}
+      }
       async function loadPayablesFromServer() {
         try {
           const list = await apiFetchJSON('/api/payables');
@@ -4250,6 +4277,7 @@
             setLabel(document.getElementById('ld-cat-label'), '子类目', false);
             setLabel(document.getElementById('ld-owner-label'), '往来单位', false);
           } catch {}
+          loadLedgerFromServer();
           applyFilters();
         } else if (hash === '#payables') {
           if (home) home.style.display = 'none';
@@ -4471,6 +4499,7 @@
       window.addEventListener('hashchange', route);
       initPersist();
       setAuthUI();
+      loadLedgerFromServer();
       loadPayablesFromServer();
       applyFilters();
       window.addEventListener('resize', updateLedgerHeaderCover);

@@ -424,6 +424,10 @@ app.post('/api/payables/import', authRequired, ensureAllow('payables','import'),
   res.json({ inserted, updated });
 });
 
+app.get('/api/ledger', authRequired, ensureAllow('ledger','view'), async (req, res) => {
+  const r = await query('select * from ledger order by created_at desc nulls last, id desc');
+  res.json(r.rows);
+});
 app.post('/api/ledger', authRequired, ensureAllow('ledger','create'), async (req, res) => {
   const x = req.body || {};
   const now = Date.now();
