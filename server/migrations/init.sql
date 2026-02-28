@@ -23,6 +23,7 @@ create table if not exists ledger(
 );
 create table if not exists contacts(
   id serial primary key,
+  type text default '客户',
   name text not null,
   contact text,
   phone text,

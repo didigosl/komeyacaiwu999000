@@ -142,6 +142,7 @@ async function ensureSchema() {
   await query('alter table ledger add column if not exists created_at bigint', []);
   await query('alter table ledger add column if not exists created_by text', []);
   await query('alter table contacts add column if not exists owner text', []);
+  await query('alter table contacts add column if not exists type text', []);
   await query('alter table contacts add column if not exists remark text', []);
   await query('alter table contacts add column if not exists zip text', []);
   await query('alter table contacts add column if not exists company text', []);
@@ -150,6 +151,9 @@ async function ensureSchema() {
   await query('alter table contacts add column if not exists address text', []);
   await query('alter table contacts add column if not exists sales text', []);
   await query("update contacts set owner='客户' where owner is null or owner=''", []);
+  await query("update contacts set type=owner where type is null or type=''", []);
+  await query("alter table contacts alter column type set default '客户'", []);
+  await query('alter table contacts alter column type drop not null', []);
   await query('create unique index if not exists uniq_contacts_owner_name on contacts(owner, name)', []);
   await query('alter table payables add column if not exists paid numeric default 0', []);
   await query('alter table payables add column if not exists settled boolean default false', []);
