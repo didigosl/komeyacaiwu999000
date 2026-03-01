@@ -19,7 +19,8 @@ create table if not exists ledger(
   date text,
   date_time text,
   created_at bigint,
-  created_by text
+  created_by text,
+  confirmed boolean default true
 );
 create table if not exists contacts(
   id serial primary key,
@@ -57,5 +58,6 @@ create table if not exists payables(
   batch_at bigint,
   batch_order int,
   source text,
-  history jsonb default '[]'::jsonb
+  history jsonb default '[]'::jsonb,
+  confirmed boolean default true
 );

@@ -8,11 +8,12 @@ begin
             jsonb_build_object(
               'date', coalesce(new.date_time, new.date, ''),
               'user', coalesce(new.created_by, ''),
-              'kind', '银行付款',
+              'kind', '收款',
               'amount', new.amount,
               'partner', new.client,
               'doc', new.doc,
-              'notes', coalesce(new.notes, '')
+              'notes', coalesce(new.notes, ''),
+              'method', coalesce(new.method, '')
             )
           )
     where doc = new.doc and type = '应收账款';
@@ -24,11 +25,12 @@ begin
             jsonb_build_object(
               'date', coalesce(new.date_time, new.date, ''),
               'user', coalesce(new.created_by, ''),
-              'kind', '银行付款',
+              'kind', '付款',
               'amount', new.amount,
               'partner', new.client,
               'doc', new.doc,
-              'notes', coalesce(new.notes, '')
+              'notes', coalesce(new.notes, ''),
+              'method', coalesce(new.method, '')
             )
           )
     where doc = new.doc and type = '应付账款';
