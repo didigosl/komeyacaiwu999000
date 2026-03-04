@@ -3100,6 +3100,34 @@
         }
         return rec;
       }
+      function mapContactRow(x) {
+        return {
+          name:x.name, contact:x.contact, phone:x.phone, city:x.city, remark:x.remark, owner:x.owner, created:x.created,
+          company:x.company, code:x.code, country:x.country, address:x.address, zip:x.zip, sales:x.sales
+        };
+      }
+      async function fetchContactsAll(tab) {
+        const size = 500;
+        let page = 1;
+        const out = [];
+        while (true) {
+          const params = new URLSearchParams({ tab: tab||'customers', q: '', page: String(page), size: String(size) });
+          const list = await apiFetchJSON('/api/contacts?' + params.toString());
+          if (Array.isArray(list)) out.push(...list);
+          if (!Array.isArray(list) || list.length < size) break;
+          page += 1;
+        }
+        return out;
+      }
+      async function loadContactsForImport() {
+        if (!can('contacts','view')) return;
+        const customers = await fetchContactsAll('customers');
+        const merchants = await fetchContactsAll('merchants');
+        const others = await fetchContactsAll('others');
+        if (Array.isArray(customers)) contactsData.customers = customers.map(mapContactRow);
+        if (Array.isArray(merchants)) contactsData.merchants = merchants.map(mapContactRow);
+        if (Array.isArray(others)) contactsData.others = others.map(mapContactRow);
+      }
       function previewImport(rows) {
         const headerRow = rows[0] ? rows[0].map(x => String(x).trim()) : [];
         const hasHeader = headerRow.some(x => /类型|款项|往来单位|凭证|发票|日期/.test(x));
@@ -3230,13 +3258,13 @@
         const reader = new FileReader();
         try { payImportModal.style.display = 'flex'; setImportModalWidth(); } catch {}
         if (name.endsWith('.csv')) {
-          reader.onload = () => { try { previewImport(parseCSV(reader.result)); setImportModalWidth(); } catch {} };
+          reader.onload = async () => { try { await loadContactsForImport(); previewImport(parseCSV(reader.result)); setImportModalWidth(); } catch {} };
           reader.readAsText(file, 'utf-8');
         } else if (name.endsWith('.xls')) {
-          reader.onload = () => { try { previewImport(parseXLS(reader.result)); setImportModalWidth(); } catch {} };
+          reader.onload = async () => { try { await loadContactsForImport(); previewImport(parseXLS(reader.result)); setImportModalWidth(); } catch {} };
           reader.readAsText(file, 'utf-8');
         } else if (name.endsWith('.xlsx')) {
-          reader.onload = () => { try { previewImport(parseXLSX(reader.result)); setImportModalWidth(); } catch {} };
+          reader.onload = async () => { try { await loadContactsForImport(); previewImport(parseXLSX(reader.result)); setImportModalWidth(); } catch {} };
           reader.readAsArrayBuffer(file);
         } else {
           alert('不支持的文件类型');
@@ -3305,7 +3333,9 @@
         if (e) { e.preventDefault(); e.stopPropagation(); }
         if (payImportCommitLock) return;
         payImportCommitLock = true;
+        if (!can('payables','import')) { alert('当前账号无“应收应付批量导入”权限'); payImportCommitLock = false; return; }
         if (payImportRequiredMissingCount) { alert(`存在必填项为空 ${payImportRequiredMissingCount} 条，无法入库`); payImportCommitLock = false; return; }
+        try { await loadContactsForImport(); } catch {}
         let createdCustomers = 0, createdMerchants = 0;
         let covered = 0, inserted = 0;
         const batchAt = Date.now();
@@ -3329,21 +3359,21 @@
           }
           payRecords.push(rec); inserted++;
         });
-        payImportParsed = [];
         payImportInvalidCount = 0;
         payImportModal.style.display = 'none';
         payPage = 1;
-        renderPayables();
-        // 不自动跳转页面，仅刷新“往来单位”数据，用户可自行查看
-        renderContacts?.();
-        saveJSON('payRecords', payRecords);
-        saveJSON('contactsData', contactsData);
-        apiFetchJSON('/api/payables/import', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ records: payRecords.filter(r => r.batchAt === batchAt) }) })
-          .then(() => loadPayablesFromServer())
-          .catch(() => {});
-        const totalChanged = inserted + covered + createdCustomers + createdMerchants;
-        if (totalChanged > 0) {
+        try {
+          await apiFetchJSON('/api/payables/import', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ records: payRecords.filter(r => r.batchAt === batchAt) }) });
+          payImportParsed = [];
+          await loadPayablesFromServer();
+          renderPayables();
+          renderContacts?.();
+          saveJSON('payRecords', payRecords);
+          saveJSON('contactsData', contactsData);
+          const totalChanged = inserted + covered + createdCustomers + createdMerchants;
           alert(`导入完成：新增记录 ${inserted} 条，覆盖更新 ${covered} 条，新增客户 ${createdCustomers} 条，新增商家 ${createdMerchants} 条。`);
+        } catch {
+          alert('导入失败，请检查权限或网络');
         }
         payImportCommitLock = false;
       };
