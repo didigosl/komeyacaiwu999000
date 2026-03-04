@@ -478,7 +478,7 @@ app.put('/api/payables/:id/confirm', authRequired, ensureAllow('payables','creat
   if (!r.rows[0]) return res.status(404).json({ error:'not_found' });
   res.json({ ok: true });
 });
-app.delete('/api/payables', authRequired, ensureAdmin, async (req, res) => {
+app.delete('/api/payables', authRequired, ensureAllow('payables','delete'), async (req, res) => {
   await query('delete from payables');
   res.json({ ok: true });
 });

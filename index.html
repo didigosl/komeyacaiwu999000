@@ -1714,7 +1714,8 @@
         }
         for (const r of data) {
           const tr = document.createElement('tr');
-          const canEdit = r.confirmed === false && r.id;
+          const canEdit = r.confirmed === false && r.id && can('payables','edit');
+          const canConfirm = r.confirmed === false && r.id && can('payables','create');
           const amt = (r.type === '开支' || r.type === '支出') ? (-r.amount).toFixed(2) : r.amount.toFixed(2);
           const makeTd = (text) => {
             const td = document.createElement('td');
@@ -1908,6 +1909,7 @@
       });
       document.getElementById('system-clear-pay')?.addEventListener('click', async () => {
         if (!confirm('确定清空应收/应付所有记录？此操作不可恢复')) return;
+        if (!can('payables','delete')) { alert('当前账号无“应收应付删除”权限'); return; }
         try {
           await apiFetchJSON('/api/payables', { method:'DELETE' });
           payRecords.splice(0, payRecords.length);
@@ -1915,7 +1917,9 @@
           payPage = 1;
           loadPayablesFromServer();
           renderContacts();
-        } catch {}
+        } catch {
+          alert('清空失败，请检查权限或网络');
+        }
       });
       document.getElementById('entry-form').addEventListener('submit', async e => {
         e.preventDefault();
@@ -2609,12 +2613,15 @@
           const ops = document.createElement('td');
           if (canEdit) {
             const editBtn = document.createElement('a'); editBtn.href='#'; editBtn.textContent='修改'; editBtn.className='link-blue';
-            const okBtn = document.createElement('a'); okBtn.href='#'; okBtn.textContent='确认'; okBtn.className='link-green';
-            ops.append(editBtn, document.createTextNode(' '), okBtn, document.createTextNode(' '));
+            ops.append(editBtn, document.createTextNode(' '));
             editBtn.addEventListener('click', e => {
               e.preventDefault();
               setPayEdit(r);
             });
+          }
+          if (canConfirm) {
+            const okBtn = document.createElement('a'); okBtn.href='#'; okBtn.textContent='确认'; okBtn.className='link-green';
+            ops.append(okBtn, document.createTextNode(' '));
             okBtn.addEventListener('click', async e => {
               e.preventDefault();
               try {
@@ -2708,6 +2715,7 @@
       });
       payClearBtn?.addEventListener('click', async () => {
         if (!confirm('确定清空应收/应付所有记录？此操作不可恢复')) return;
+        if (!can('payables','delete')) { alert('当前账号无“应收应付删除”权限'); return; }
         try {
           await apiFetchJSON('/api/payables', { method:'DELETE' });
           payRecords.splice(0, payRecords.length);
@@ -2715,7 +2723,9 @@
           payPage = 1;
           loadPayablesFromServer();
           renderContacts();
-        } catch {}
+        } catch {
+          alert('清空失败，请检查权限或网络');
+        }
       });
       const handlePayFormSubmit = async (e) => {
         if (e) { e.preventDefault(); e.stopPropagation(); }
@@ -2725,6 +2735,7 @@
         document.getElementById('pay-label-doc')?.classList.remove('invalid-label');
         document.getElementById('pay-label-amount')?.classList.remove('invalid-label');
         if (payImportParsed.length) {
+          if (!can('payables','import')) { alert('当前账号无“应收应付批量导入”权限'); paySubmitLock = false; return; }
           let covered = 0, inserted = 0, createdCustomers = 0, createdMerchants = 0;
           const batchAt = Date.now();
           let batchOrder = 0;
@@ -2747,21 +2758,25 @@
             payRecords.push(rec); inserted++;
           });
           const uploadList = payImportParsed.slice();
-          payImportParsed = [];
           if (payImportFile) payImportFile.value = '';
           if (payImportHint) payImportHint.textContent = '批量导入完成';
           payPage = 1;
-          apiFetchJSON('/api/payables/import', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ records: uploadList }) })
-            .then(() => loadPayablesFromServer())
-            .catch(() => {});
-          renderPayables();
-          if (contactsSearch) contactsSearch.value = '';
-          renderContacts();
-          saveJSON('payRecords', payRecords);
-          saveJSON('contactsData', contactsData);
-          const gp = document.getElementById('global-pager'); if (gp) gp.style.display = 'flex';
-          renderPayables();
-          alert(`导入完成：新增记录 ${inserted} 条，覆盖更新 ${covered} 条，新增客户 ${createdCustomers} 条，新增商家 ${createdMerchants} 条。`);
+          try {
+            await apiFetchJSON('/api/payables/import', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ records: uploadList }) });
+            payImportParsed = [];
+            await loadPayablesFromServer();
+            renderPayables();
+            if (contactsSearch) contactsSearch.value = '';
+            renderContacts();
+            saveJSON('payRecords', payRecords);
+            saveJSON('contactsData', contactsData);
+            const gp = document.getElementById('global-pager'); if (gp) gp.style.display = 'flex';
+            renderPayables();
+            alert(`导入完成：新增记录 ${inserted} 条，覆盖更新 ${covered} 条，新增客户 ${createdCustomers} 条，新增商家 ${createdMerchants} 条。`);
+          } catch {
+            alert('导入失败，请检查权限或网络');
+          }
+          paySubmitLock = false;
           return;
         }
         const type = payType.value;
@@ -2812,6 +2827,7 @@
         const dateTime = `${date} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
         const creator = (getAuthUser()?.name) || '';
         if (refundMode) {
+          if (!can('payables','create')) { alert('当前账号无“应收应付新增”权限'); paySubmitLock = false; return; }
           const origin = getRefundOrigin(doc, type);
           if (!origin) {
             alert('退单必须关联已有凭证号');
@@ -2888,6 +2904,7 @@
           }
         }
         if (payEditingId) {
+          if (!can('payables','edit')) { alert('当前账号无“应收应付编辑”权限'); paySubmitLock = false; return; }
           const origin = payRecords.find(r => r.id === payEditingId) || {};
           const paidVal = Number(origin.paid || 0);
           const settledVal = amount > 0 && paidVal >= amount;
@@ -2911,17 +2928,28 @@
           try {
             await apiFetchJSON('/api/payables/' + String(payEditingId), { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
             clearPayEdit();
-            loadPayablesFromServer();
+            await loadPayablesFromServer();
             renderContacts();
-          } catch {}
+          } catch {
+            alert('提交失败，请检查权限或网络');
+            paySubmitLock = false;
+            return;
+          }
         } else {
+          if (!can('payables','create')) { alert('当前账号无“应收应付新增”权限'); paySubmitLock = false; return; }
           const rec = { type, partner, doc, sales, amount, paid: 0, trustDays, notes, date, settled:false, history: [], createdAt: Date.now(), invoiceNo:'', invoiceDate:'', invoiceAmount:0, source:'manual', confirmed:false };
           rec.batchAt = Date.now();
           rec.batchOrder = 0;
           rec.history.push({ date: dateTime, user: creator, kind: refundMode ? '退单' : '创建', amount, partner, doc, notes: refundMode ? `${notes ? notes + '，' : ''}退单金额${amount.toFixed(2)}` : notes });
-          apiFetchJSON('/api/payables', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(rec) })
-            .then((res) => { if (res && res.id) rec.id = res.id; loadPayablesFromServer(); })
-            .catch(() => { payRecords.push(rec); });
+          try {
+            const res = await apiFetchJSON('/api/payables', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(rec) });
+            if (res && res.id) rec.id = res.id;
+            await loadPayablesFromServer();
+          } catch {
+            alert('提交失败，请检查权限或网络');
+            paySubmitLock = false;
+            return;
+          }
         }
         payPartner.value = '';
         payDoc.value = '';
