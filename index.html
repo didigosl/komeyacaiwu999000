@@ -3452,11 +3452,12 @@
         document.getElementById('partner-orders-close')?.addEventListener('click', () => { modal.style.display = 'none'; });
       }
       async function renderContacts() {
-        const list = contactsData[contactsTab] || [];
         const key = (contactsSearch?.value || '').trim();
         await apiContactsList(contactsTab, key, contactsPage, contactsPageSize);
-        await seedDefaultContacts(contactsTab);
-        await apiContactsList(contactsTab, key, contactsPage, contactsPageSize);
+        if (contactsPage > 1 && (contactsData[contactsTab] || []).length === 0) {
+          contactsPage = 1;
+          await apiContactsList(contactsTab, key, contactsPage, contactsPageSize);
+        }
         const fresh = contactsData[contactsTab] || [];
         const filtered = fresh.filter(x => {
           if (!key) return true;
