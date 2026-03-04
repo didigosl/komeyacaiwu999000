@@ -2483,41 +2483,54 @@
         }
         if (sumRecvEl) sumRecvEl.textContent = recv.toFixed(2);
         if (sumPayEl) sumPayEl.textContent = pay.toFixed(2);
-        const key = (payFilterKey?.value || '').trim();
-        let listAll = payRecords.filter(r => {
-          if (!key) return true;
-          return [r.partner||'', r.doc||'', r.notes||''].some(v => v.includes(key));
-        });
-        if (payFilterType !== 'all') {
-          listAll = listAll.filter(r => (payFilterType === 'recv' ? /应收/.test(r.type) : /应付/.test(r.type)));
-        }
-        if (payFilterSalesName) {
-          listAll = listAll.filter(r => {
-            if (payFilterSalesName === '__none__') return !(r.sales);
-            return (r.sales || '') === payFilterSalesName;
+        const applyPayFilters = () => {
+          const key = (payFilterKey?.value || '').trim();
+          let out = payRecords.filter(r => {
+            if (!key) return true;
+            return [r.partner||'', r.doc||'', r.notes||''].some(v => v.includes(key));
           });
-        }
-        if (payFilterOverdue !== 'all') {
-          listAll = listAll.filter(r => {
-            const trustDaysVal = r.trustDays ?? null;
-            let isOverdue = false;
-            if (!r.settled && trustDaysVal != null && trustDaysVal > 0) {
-              const start = new Date(r.date);
-              const now = new Date();
-              const diffDays = Math.floor((now - start) / (1000*60*60*24));
-              const overdueDays = diffDays - trustDaysVal;
-              if (overdueDays > 0) isOverdue = true;
-            }
-            return payFilterOverdue === 'overdue' ? isOverdue : !isOverdue;
-          });
-        }
-        if (payFilterStatus !== 'all') {
-          listAll = listAll.filter(r => {
-            const arrears = Math.max(0, (r.amount || 0) - (r.paid || 0));
-            if (payFilterStatus === 'arrears') return arrears > 0;
-            if (payFilterStatus === 'done') return arrears === 0;
-            return true;
-          });
+          if (payFilterType !== 'all') {
+            out = out.filter(r => (payFilterType === 'recv' ? /应收/.test(r.type) : /应付/.test(r.type)));
+          }
+          if (payFilterSalesName) {
+            out = out.filter(r => {
+              if (payFilterSalesName === '__none__') return !(r.sales);
+              return (r.sales || '') === payFilterSalesName;
+            });
+          }
+          if (payFilterOverdue !== 'all') {
+            out = out.filter(r => {
+              const trustDaysVal = r.trustDays ?? null;
+              let isOverdue = false;
+              if (!r.settled && trustDaysVal != null && trustDaysVal > 0) {
+                const start = new Date(r.date);
+                const now = new Date();
+                const diffDays = Math.floor((now - start) / (1000*60*60*24));
+                const overdueDays = diffDays - trustDaysVal;
+                if (overdueDays > 0) isOverdue = true;
+              }
+              return payFilterOverdue === 'overdue' ? isOverdue : !isOverdue;
+            });
+          }
+          if (payFilterStatus !== 'all') {
+            out = out.filter(r => {
+              const arrears = Math.max(0, (r.amount || 0) - (r.paid || 0));
+              if (payFilterStatus === 'arrears') return arrears > 0;
+              if (payFilterStatus === 'done') return arrears === 0;
+              return true;
+            });
+          }
+          return out;
+        };
+        let listAll = applyPayFilters();
+        if (!listAll.length && payRecords.length) {
+          if (payFilterKey) payFilterKey.value = '';
+          payFilterType = 'all';
+          payFilterSalesName = '';
+          payFilterOverdue = 'all';
+          payFilterStatus = 'all';
+          payPage = 1;
+          listAll = applyPayFilters();
         }
         // 按批次排序：最近一次上传的记录位于最前，同时批内保持表格行序
         const hasBatch = listAll.some(r => r.batchAt);
@@ -2530,6 +2543,7 @@
         }) : listAll;
         const total = listSorted.length;
         const totalPages = Math.max(1, Math.ceil(total / payPageSize));
+        if (!Number.isFinite(payPage) || payPage < 1) payPage = 1;
         if (payPage > totalPages) payPage = totalPages;
         const startIdx = (payPage - 1) * payPageSize;
         const list = listSorted.slice(startIdx, startIdx + payPageSize);
