@@ -11,6 +11,7 @@ app.use(cors());
 app.use(express.json({ limit: '20mb' }));
 app.use(morgan('dev'));
 app.use((req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store');
   if (!req.path.startsWith('/api/')) req.url = '/api' + req.url;
   next();
 });
