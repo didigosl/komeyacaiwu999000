@@ -574,9 +574,21 @@ app.post('/api/contacts', authRequired, ensureAllow('contacts','create'), async 
   const owner = x.owner || '客户';
   const r = await query(`
     insert into contacts(name, contact, phone, city, remark, owner, created, company, code, country, address, zip, sales)
-    values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) returning id
+    values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+    on conflict (owner, name) do update set
+      contact=excluded.contact,
+      phone=excluded.phone,
+      city=excluded.city,
+      remark=excluded.remark,
+      company=excluded.company,
+      code=excluded.code,
+      country=excluded.country,
+      address=excluded.address,
+      zip=excluded.zip,
+      sales=excluded.sales
+    returning id
   `, [x.name||'', x.contact||'', x.phone||'', x.city||'', x.remark||'', owner, x.created||'', x.company||'', x.code||'', x.country||'', x.address||'', x.zip||'', x.sales||'']);
-  res.json({ id: r.rows[0].id });
+  res.json({ id: r.rows[0]?.id || null });
 });
 
 app.put('/api/contacts/by-name', authRequired, ensureAllow('contacts','edit'), async (req, res) => {
