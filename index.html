@@ -535,7 +535,7 @@
                 <div class="summary-item">应付总额 <span id="sum-pay">0.00</span></div>
                 <div class="field" style="margin-left:auto; min-width:320px; display:flex; align-items:center; gap:8px;">
                   <span class="label">关键词</span>
-                  <input id="pay-filter-key" type="text" placeholder="搜索关键词">
+                  <input id="pay-filter-key" type="text" placeholder="搜索关键词" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" inputmode="text" name="pay-filter-key">
                 </div>
                 <button id="pay-export" class="btn" style="margin-left:8px; display:flex; align-items:center; gap:6px">
                   <span style="display:inline-block; width:14px; height:14px; background:#22c55e; border-radius:3px"></span>
@@ -2146,6 +2146,7 @@
       const payPager = document.getElementById('global-pager-controls') || document.getElementById('pay-pager');
       const payFooterInfo = document.getElementById('pay-footer-info');
       const payTableWrap = document.getElementById('pay-table-wrap');
+      let payFilterComposing = false;
       const thType = document.getElementById('th-type');
       const thTypeDD = document.getElementById('th-type-dd');
       const thTypeList = document.getElementById('th-type-list');
@@ -2556,107 +2557,121 @@
           tr.appendChild(td); payRows.appendChild(tr);
           return;
         }
+        let renderErrors = 0;
         for (const r of list) {
-          const tr = document.createElement('tr');
-          const typeDisplay = /应收/.test(r.type) ? '应收' : '应付';
-          const tl = trustLabelDisplay(r);
-          const trustLabel = tl.label;
-          const isOverdue = tl.overdue;
-          const paid = r.paid || 0;
-          const arrears = Math.max(0, (r.amount || 0) - paid);
-          const canEdit = r.confirmed === false && r.id;
-          const tdType = document.createElement('td'); tdType.textContent = typeDisplay; tr.appendChild(tdType);
-          const tdPartner = document.createElement('td'); tdPartner.textContent = r.partner || ''; tr.appendChild(tdPartner);
-          const tdDoc = document.createElement('td');
-          const docUp = document.createElement('div');
-          docUp.style.display = 'flex';
-          docUp.style.alignItems = 'center';
-          docUp.style.gap = '6px';
-          const docText = document.createElement('span');
-          docText.textContent = (r.doc || '');
-          docUp.appendChild(docText);
-          if (hasRefundRecord(r)) {
-            const tag = document.createElement('span');
-            tag.className = 'tag';
-            tag.textContent = '退';
-            tag.style.background = '#7f1d1d';
-            tag.style.color = '#fecaca';
-            tag.style.borderColor = '#7f1d1d';
-            docUp.appendChild(tag);
-          }
-          const docDown = document.createElement('div'); docDown.textContent = r.source === 'import' ? parseDateCN(r.date || '') : ''; docDown.style.color = '#9ca3af'; docDown.style.fontSize = '12px';
-          tdDoc.appendChild(docUp); if (docDown.textContent) tdDoc.appendChild(docDown);
-          tr.appendChild(tdDoc);
-          const tdAmount = document.createElement('td'); tdAmount.textContent = (r.amount||0).toFixed(2); tr.appendChild(tdAmount);
-          const tdInv = document.createElement('td');
-          const invUp = document.createElement('div');
-          const invNo = (r.invoiceNo || '');
-          if (invNo) {
-            invUp.textContent = invNo;
-          } else if (r.confirmed === false) {
-            const a = document.createElement('a'); a.href='#'; a.textContent='-'; a.className='link-blue';
-            a.addEventListener('click', e => { e.preventDefault(); openInvoiceModal(r); });
-            invUp.appendChild(a);
-          } else {
-            invUp.textContent = '-';
-          }
-          const invDown = document.createElement('div'); invDown.textContent = parseDateCN(r.invoiceDate || ''); invDown.style.color = '#9ca3af'; invDown.style.fontSize = '12px';
-          tdInv.appendChild(invUp); tdInv.appendChild(invDown);
-          tr.appendChild(tdInv);
-          const tdInvAmt = document.createElement('td');
-          const invAmtNum = Number(r.invoiceAmount || 0);
-          if (invAmtNum > 0 && isFinite(invAmtNum)) {
-            tdInvAmt.textContent = invAmtNum.toFixed(2);
-          } else if (r.confirmed === false) {
-            const a = document.createElement('a'); a.href='#'; a.textContent='-'; a.className='link-blue';
-            a.addEventListener('click', e => { e.preventDefault(); openInvoiceModal(r); });
-            tdInvAmt.appendChild(a);
-          } else {
-            tdInvAmt.textContent = '-';
-          }
-          tr.appendChild(tdInvAmt);
-          const tdAr = document.createElement('td'); tdAr.textContent = arrears.toFixed(2); tr.appendChild(tdAr);
-          const tdTrust = document.createElement('td'); tdTrust.textContent = trustLabel; if (isOverdue) tdTrust.classList.add('overdue'); tr.appendChild(tdTrust);
-          const tdNotes = document.createElement('td');
-          tdNotes.textContent = summarizeNotes(r.notes, 10, 2);
-          tdNotes.style.whiteSpace = 'pre-wrap';
-          tdNotes.style.wordBreak = 'break-all';
-          tr.appendChild(tdNotes);
-          const tdSales = document.createElement('td'); tdSales.textContent = r.sales || '-'; tr.appendChild(tdSales);
-          const tdDate = document.createElement('td'); tdDate.textContent = safePayDate(r); tr.appendChild(tdDate);
-          const ops = document.createElement('td');
-          if (canEdit) {
-            const editBtn = document.createElement('a'); editBtn.href='#'; editBtn.textContent='修改'; editBtn.className='link-blue';
-            ops.append(editBtn, document.createTextNode(' '));
-            editBtn.addEventListener('click', e => {
+          try {
+            const tr = document.createElement('tr');
+            const typeDisplay = /应收/.test(r.type) ? '应收' : '应付';
+            const tl = trustLabelDisplay(r);
+            const trustLabel = tl.label;
+            const isOverdue = tl.overdue;
+            const paid = Number(r.paid || 0);
+            const amountNum = Number(r.amount || 0);
+            const arrears = Math.max(0, amountNum - paid);
+            const canEdit = r.confirmed === false && r.id && can('payables','edit');
+            const canConfirm = r.confirmed === false && r.id && can('payables','create');
+            const tdType = document.createElement('td'); tdType.textContent = typeDisplay; tr.appendChild(tdType);
+            const tdPartner = document.createElement('td'); tdPartner.textContent = r.partner || ''; tr.appendChild(tdPartner);
+            const tdDoc = document.createElement('td');
+            const docUp = document.createElement('div');
+            docUp.style.display = 'flex';
+            docUp.style.alignItems = 'center';
+            docUp.style.gap = '6px';
+            const docText = document.createElement('span');
+            docText.textContent = (r.doc || '');
+            docUp.appendChild(docText);
+            if (hasRefundRecord(r)) {
+              const tag = document.createElement('span');
+              tag.className = 'tag';
+              tag.textContent = '退';
+              tag.style.background = '#7f1d1d';
+              tag.style.color = '#fecaca';
+              tag.style.borderColor = '#7f1d1d';
+              docUp.appendChild(tag);
+            }
+            const docDown = document.createElement('div'); docDown.textContent = r.source === 'import' ? parseDateCN(r.date || '') : ''; docDown.style.color = '#9ca3af'; docDown.style.fontSize = '12px';
+            tdDoc.appendChild(docUp); if (docDown.textContent) tdDoc.appendChild(docDown);
+            tr.appendChild(tdDoc);
+            const tdAmount = document.createElement('td'); tdAmount.textContent = amountNum.toFixed(2); tr.appendChild(tdAmount);
+            const tdInv = document.createElement('td');
+            const invUp = document.createElement('div');
+            const invNo = (r.invoiceNo || '');
+            if (invNo) {
+              invUp.textContent = invNo;
+            } else if (r.confirmed === false) {
+              const a = document.createElement('a'); a.href='#'; a.textContent='-'; a.className='link-blue';
+              a.addEventListener('click', e => { e.preventDefault(); openInvoiceModal(r); });
+              invUp.appendChild(a);
+            } else {
+              invUp.textContent = '-';
+            }
+            const invDown = document.createElement('div'); invDown.textContent = parseDateCN(r.invoiceDate || ''); invDown.style.color = '#9ca3af'; invDown.style.fontSize = '12px';
+            tdInv.appendChild(invUp); tdInv.appendChild(invDown);
+            tr.appendChild(tdInv);
+            const tdInvAmt = document.createElement('td');
+            const invAmtNum = Number(r.invoiceAmount || 0);
+            if (invAmtNum > 0 && isFinite(invAmtNum)) {
+              tdInvAmt.textContent = invAmtNum.toFixed(2);
+            } else if (r.confirmed === false) {
+              const a = document.createElement('a'); a.href='#'; a.textContent='-'; a.className='link-blue';
+              a.addEventListener('click', e => { e.preventDefault(); openInvoiceModal(r); });
+              tdInvAmt.appendChild(a);
+            } else {
+              tdInvAmt.textContent = '-';
+            }
+            tr.appendChild(tdInvAmt);
+            const tdAr = document.createElement('td'); tdAr.textContent = arrears.toFixed(2); tr.appendChild(tdAr);
+            const tdTrust = document.createElement('td'); tdTrust.textContent = trustLabel; if (isOverdue) tdTrust.classList.add('overdue'); tr.appendChild(tdTrust);
+            const tdNotes = document.createElement('td');
+            tdNotes.textContent = summarizeNotes(r.notes, 10, 2);
+            tdNotes.style.whiteSpace = 'pre-wrap';
+            tdNotes.style.wordBreak = 'break-all';
+            tr.appendChild(tdNotes);
+            const tdSales = document.createElement('td'); tdSales.textContent = r.sales || '-'; tr.appendChild(tdSales);
+            const tdDate = document.createElement('td'); tdDate.textContent = safePayDate(r); tr.appendChild(tdDate);
+            const ops = document.createElement('td');
+            if (canEdit) {
+              const editBtn = document.createElement('a'); editBtn.href='#'; editBtn.textContent='修改'; editBtn.className='link-blue';
+              ops.append(editBtn, document.createTextNode(' '));
+              editBtn.addEventListener('click', e => {
+                e.preventDefault();
+                setPayEdit(r);
+              });
+            }
+            if (canConfirm) {
+              const okBtn = document.createElement('a'); okBtn.href='#'; okBtn.textContent='确认'; okBtn.className='link-green';
+              ops.append(okBtn, document.createTextNode(' '));
+              okBtn.addEventListener('click', async e => {
+                e.preventDefault();
+                try {
+                  await apiFetchJSON('/api/payables/' + String(r.id) + '/confirm', { method:'PUT' });
+                  clearPayEdit();
+                  loadPayablesFromServer();
+                  renderContacts();
+                } catch {}
+              });
+            }
+            const btn = document.createElement('a'); btn.href='#'; btn.textContent='详情'; btn.className='link-blue';
+            ops.appendChild(btn);
+            tr.appendChild(ops);
+            btn.addEventListener('click', e => {
               e.preventDefault();
-              setPayEdit(r);
+              openPayHistory(r);
             });
-          }
-          if (canConfirm) {
-            const okBtn = document.createElement('a'); okBtn.href='#'; okBtn.textContent='确认'; okBtn.className='link-green';
-            ops.append(okBtn, document.createTextNode(' '));
-            okBtn.addEventListener('click', async e => {
-              e.preventDefault();
-              try {
-                await apiFetchJSON('/api/payables/' + String(r.id) + '/confirm', { method:'PUT' });
-                clearPayEdit();
-                loadPayablesFromServer();
-                renderContacts();
-              } catch {}
+            if (r.settled) tr.classList.add('pay-row-settled');
+            else if (typeDisplay === '应收') tr.classList.add('pay-row-recv');
+            else tr.classList.add('pay-row-pay');
+            payRows.appendChild(tr);
+          } catch {
+            renderErrors += 1;
+            const tr = document.createElement('tr');
+            [r.type, r.partner, r.doc, r.amount, r.invoiceNo, r.invoiceAmount, '', '', r.notes, r.sales, r.date, ''].forEach(v => {
+              const td = document.createElement('td');
+              td.textContent = String(v ?? '');
+              tr.appendChild(td);
             });
+            payRows.appendChild(tr);
           }
-          const btn = document.createElement('a'); btn.href='#'; btn.textContent='详情'; btn.className='link-blue';
-          ops.appendChild(btn);
-          tr.appendChild(ops);
-          btn.addEventListener('click', e => {
-            e.preventDefault();
-            openPayHistory(r);
-          });
-          if (r.settled) tr.classList.add('pay-row-settled');
-          else if (typeDisplay === '应收') tr.classList.add('pay-row-recv');
-          else tr.classList.add('pay-row-pay');
-          payRows.appendChild(tr);
         }
         if (payTableWrap) payTableWrap.scrollTop = 0;
         if (payPager) {
@@ -2694,9 +2709,12 @@
           payFooterInfo.appendChild(mk(`共 ${totalCount} 条记录`));
           payFooterInfo.appendChild(mk(`今日上传 ${todayCount} 条`));
           payFooterInfo.appendChild(mk(`最后次上传 ${latestBatchCount} 条`));
+          if (renderErrors) payFooterInfo.appendChild(mk(`渲染异常 ${renderErrors} 条`));
         }
       }
-      payFilterKey?.addEventListener('input', () => { payPage = 1; renderPayables(); });
+      payFilterKey?.addEventListener('compositionstart', () => { payFilterComposing = true; });
+      payFilterKey?.addEventListener('compositionend', () => { payFilterComposing = false; payPage = 1; renderPayables(); });
+      payFilterKey?.addEventListener('input', () => { if (payFilterComposing) return; payPage = 1; renderPayables(); });
       payExportBtn?.addEventListener('click', () => {
         const data = payLastPageData || [];
         if (!data.length) { alert('当前页面无记录可导出'); return; }
@@ -2812,7 +2830,7 @@
         }
         if (!partner) invalidLabels.push('pay-label-partner');
         if (!doc) invalidLabels.push('pay-label-doc');
-        if (!amountStr || !amount) invalidLabels.push('pay-label-amount');
+        if (amountStr === '' || Number.isNaN(amount)) invalidLabels.push('pay-label-amount');
         if (invalidLabels.length) {
           invalidLabels.forEach(id => {
             const el = document.getElementById(id);
@@ -3187,7 +3205,7 @@
           if (!rowType) rowType = selectedFlag; // 空类型按页面选择容错，但仍标记为错误
           const partnerName = String(row[idx.partner] ?? '').trim();
           const docVal = String(row[idx.doc] ?? '').trim();
-          const amtVal = String(row[idx.amount] ?? '').trim();
+        const amtVal = String(row[idx.amount] ?? '').trim();
           if (![rowType, partnerName, docVal, amtVal].some(v => String(v||'').trim())) return;
           const colsX = [
             row[idx.type] ?? '',
@@ -3210,7 +3228,7 @@
           const missType = originalTypeEmpty;
           const missPartner = !partnerName;
           const missDoc = !docVal;
-          const missAmount = !amtVal;
+        const missAmount = amtVal === '';
           if (missPartner) { isErrorRow = true; errorReason = errorReason ? (errorReason + '；店名为空') : '店名为空'; payImportInvalidCount++; }
           const isRequiredMissing = missType || missPartner || missDoc || missAmount;
           if (isRequiredMissing) requiredMissingCount++;
@@ -4328,7 +4346,7 @@
       function setPwdMap(map) {
         localStorage.setItem('userPasswords', JSON.stringify(map || {}));
       }
-      const API_BASE = ((location.hostname === 'localhost') && location.port && location.port !== '80' && location.port !== '443') ? 'http://localhost:5001' : '';
+      const API_BASE = (location.hostname === 'localhost' || location.hostname === '127.0.0.1') ? 'https://komeyacaiwu.didigo.es' : '';
       function getAuthToken() { try { return localStorage.getItem('authToken') || ''; } catch { return ''; } }
       async function apiFetchJSON(path, opts) {
         const token = getAuthToken();
@@ -4780,6 +4798,7 @@
             payFilterStatus = 'all';
             payFilterOverdue = 'all';
             payPage = 1;
+            if (payFilterKey) payFilterKey.value = '';
             const setDefault = () => {
               const reset = (el, text) => { if (el) { el.textContent = text + ' ▾'; el.style.color = ''; } };
               reset(document.getElementById('th-type-label'), '款项类型');

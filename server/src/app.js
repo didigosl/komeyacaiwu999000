@@ -384,7 +384,7 @@ app.get('/api/payables', authRequired, ensureAllow('payables','view'), async (re
 
 app.post('/api/payables', authRequired, ensureAllow('payables','create'), async (req, res) => {
   const p = normalizePayable({ ...req.body, source: req.body.source || 'manual' });
-  if (!p.type || !p.partner || !p.doc || !p.amount) return res.status(400).json({ error: 'bad_request' });
+  if (!p.type || !p.partner || !p.doc || !Number.isFinite(p.amount)) return res.status(400).json({ error: 'bad_request' });
   // upsert by (type, doc)
   const r = await query(`
     insert into payables(type,partner,doc,amount,paid,settled,trust_days,notes,invoice_no,invoice_date,invoice_amount,sales,date,created_at,batch_at,batch_order,source,history,confirmed)
@@ -417,7 +417,7 @@ app.post('/api/payables/import', authRequired, ensureAllow('payables','import'),
   let inserted = 0, updated = 0;
   for (const rec of list) {
     const p = normalizePayable(rec);
-    if (!p.type || !p.partner || !p.doc || !p.amount) continue;
+    if (!p.type || !p.partner || !p.doc || !Number.isFinite(p.amount)) continue;
     const r = await query(`
       insert into payables(type,partner,doc,amount,paid,settled,trust_days,notes,invoice_no,invoice_date,invoice_amount,sales,date,created_at,batch_at,batch_order,source,history,confirmed)
       values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
