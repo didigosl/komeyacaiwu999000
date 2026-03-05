@@ -2486,9 +2486,10 @@
         if (sumPayEl) sumPayEl.textContent = pay.toFixed(2);
         const applyPayFilters = () => {
           const key = (payFilterKey?.value || '').trim();
+          const keyLower = key.toLowerCase();
           let out = payRecords.filter(r => {
             if (!key) return true;
-            return [r.partner||'', r.doc||'', r.notes||''].some(v => v.includes(key));
+            return [r.partner||'', r.doc||'', r.notes||''].some(v => String(v || '').toLowerCase().includes(keyLower));
           });
           if (payFilterType !== 'all') {
             out = out.filter(r => (payFilterType === 'recv' ? /应收/.test(r.type) : /应付/.test(r.type)));
@@ -2523,16 +2524,7 @@
           }
           return out;
         };
-        let listAll = applyPayFilters();
-        if (!listAll.length && payRecords.length) {
-          if (payFilterKey) payFilterKey.value = '';
-          payFilterType = 'all';
-          payFilterSalesName = '';
-          payFilterOverdue = 'all';
-          payFilterStatus = 'all';
-          payPage = 1;
-          listAll = applyPayFilters();
-        }
+        const listAll = applyPayFilters();
         // 按批次排序：最近一次上传的记录位于最前，同时批内保持表格行序
         const hasBatch = listAll.some(r => r.batchAt);
         const listSorted = hasBatch ? listAll.slice().sort((a,b) => {
