@@ -2018,10 +2018,10 @@
       const paySubmitBtn = payForm?.querySelector('button[type="submit"]');
       let refundMode = false;
       let refundOrigin = null;
-      function payDocExists(doc, recType, excludeId) {
+      function payDocExists(doc, excludeId) {
         const d = String(doc || '').trim();
         if (!d) return false;
-        return payRecords.some(r => String(r.doc||'').trim() === d && r.type === recType && (!excludeId || r.id !== excludeId));
+        return payRecords.some(r => String(r.doc||'').trim() === d && (!excludeId || r.id !== excludeId));
       }
       function getRefundOrigin(doc, recType) {
         const d = String(doc || '').trim();
@@ -2092,10 +2092,9 @@
       }
       function validatePayDoc(showAlert) {
         if (refundMode) { setPayDocInvalid(false); return; }
-        const type = payType?.value || '';
         const doc = (payDoc?.value || '').trim();
-        if (!type || !doc) { setPayDocInvalid(false); return; }
-        const exists = payDocExists(doc, type, payEditingId);
+        if (!doc) { setPayDocInvalid(false); return; }
+        const exists = payDocExists(doc, payEditingId);
         setPayDocInvalid(exists);
         if (exists && showAlert) alert('凭证号已存在');
       }
@@ -2998,6 +2997,8 @@
       let payImportParsed = [];
       let payImportInvalidCount = 0;
       let payImportRequiredMissingCount = 0;
+      let payImportTypeMismatchCount = 0;
+      let payImportMixedType = false;
       function parseCSV(text) {
         const rows = [];
         let i = 0, cur = '', inQ = false, row = [];
@@ -3189,12 +3190,16 @@
         let cntNewMerchantsEst = 0;
         let parsedVisibleCount = 0;
         let requiredMissingCount = 0;
+        const typeFlags = new Set();
         const existCustomers = new Set((contactsData.customers||[]).map(x => String(x.name||'').trim()));
         const existMerchants = new Set((contactsData.merchants||[]).map(x => String(x.name||'').trim()));
         dataRows.forEach(row => {
-          let rowType = String(row[idx.type] ?? '').trim();
+          const rowType = String(row[idx.type] ?? '').trim();
           const originalTypeEmpty = !rowType;
-          if (!rowType) rowType = selectedFlag; // 空类型按页面选择容错，但仍标记为错误
+          let rowFlag = '';
+          if (rowType.includes('应付')) rowFlag = '应付';
+          else if (rowType.includes('应收')) rowFlag = '应收';
+          if (rowFlag) typeFlags.add(rowFlag);
           const partnerName = String(row[idx.partner] ?? '').trim();
           const docVal = String(row[idx.doc] ?? '').trim();
         const amtVal = String(row[idx.amount] ?? '').trim();
@@ -3216,8 +3221,9 @@
           const tr = document.createElement('tr');
           let isErrorRow = false;
           let errorReason = '';
-          if (rowType && !rowType.includes(selectedFlag)) { isErrorRow = true; errorReason = '性质不匹配：页面与A列不一致'; cntTypeMismatch++; colsX[0] = selectedFlag; }
-          const missType = originalTypeEmpty;
+          const typeMismatch = rowFlag && rowFlag !== selectedFlag;
+          if (typeMismatch) { isErrorRow = true; errorReason = '性质不匹配：页面与A列不一致'; cntTypeMismatch++; }
+          const missType = originalTypeEmpty || !rowFlag;
           const missPartner = !partnerName;
           const missDoc = !docVal;
         const missAmount = amtVal === '';
@@ -3246,7 +3252,7 @@
             tr.appendChild(td);
           });
           payImportRows.appendChild(tr);
-          if (isRequiredMissing) return;
+          if (isRequiredMissing || typeMismatch) return;
           parsedVisibleCount++;
           const rec = rowToRecord(colsX);
           payImportParsed.push(rec);
@@ -3259,21 +3265,26 @@
             if (!existMerchants.has(rec.partner.trim())) cntNewMerchantsEst++;
           }
         });
+        payImportTypeMismatchCount = cntTypeMismatch;
+        payImportMixedType = typeFlags.size > 1;
         const summary = [
           `已解析 ${parsedVisibleCount} 条`,
           (cntUpdatedEst ? `预计覆盖 ${cntUpdatedEst} 条` : ''),
           ((cntNewCustomersEst+cntNewMerchantsEst) ? `预计新增客户/商家 ${cntNewCustomersEst+cntNewMerchantsEst} 条` : ''),
           (payImportInvalidCount ? `已跳过店名为空 ${payImportInvalidCount} 条` : ''),
           (cntTypeMismatch ? `性质不匹配 ${cntTypeMismatch} 条（A列与页面不一致，不导入）` : ''),
+          (payImportMixedType ? '应收/应付混合，请分开导入' : ''),
           (requiredMissingCount ? `存在必填项为空 ${requiredMissingCount} 条（应收应付/往来单位/凭证号/订单金额），请修正后再入库` : ''),
         ].filter(Boolean).join(' | ');
         payImportSummary.textContent = summary;
         if (payImportHint) {
-          if (requiredMissingCount) payImportHint.textContent = `存在必填项为空 ${requiredMissingCount} 条，无法入库`;
+          if (payImportMixedType) payImportHint.textContent = '表格包含应收与应付混合，请分开导入';
+          else if (cntTypeMismatch) payImportHint.textContent = '页面选择与表格不一致，请确认上传项目';
+          else if (requiredMissingCount) payImportHint.textContent = `存在必填项为空 ${requiredMissingCount} 条，无法入库`;
           else payImportHint.textContent = `已选择 ${parsedVisibleCount} 条，点击下方提交完成入库`;
         }
         payImportRequiredMissingCount = requiredMissingCount;
-        if (payImportCommit) payImportCommit.disabled = false;
+        if (payImportCommit) payImportCommit.disabled = payImportMixedType || cntTypeMismatch > 0 || requiredMissingCount > 0;
       }
       payImportFile?.addEventListener('change', () => {
         const file = payImportFile?.files?.[0];
@@ -3318,18 +3329,16 @@
         apiContactsCreate?.(obj);
       }
       function findExistingPayRecord(rec) {
-        const p = String(rec.partner || '').trim();
         const d = String(rec.doc || '').trim();
-        return payRecords.find(r =>
-          r.type === rec.type &&
-          String(r.partner||'').trim() === p &&
-          String(r.doc||'').trim() === d
-        );
+        if (!d) return null;
+        return payRecords.find(r => String(r.doc||'').trim() === d);
       }
       function mergePayRecord(target, src) {
         const now = new Date();
         const dateTime = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
         const user = (getAuthUser()?.name) || '';
+        target.type = src.type || target.type;
+        target.partner = src.partner || target.partner;
         target.sales = src.sales || target.sales || '';
         if (!isNaN(src.amount)) target.amount = src.amount;
         if (!isNaN(src.paid)) {
@@ -3358,10 +3367,12 @@
         if (payImportCommitLock) return;
         payImportCommitLock = true;
         if (!can('payables','import')) { alert('当前账号无“应收应付批量导入”权限'); payImportCommitLock = false; return; }
+        if (payImportMixedType) { alert('表格包含应收与应付混合，请分开导入'); payImportCommitLock = false; return; }
+        if (payImportTypeMismatchCount) { alert('页面选择与表格不一致，请确认上传项目'); payImportCommitLock = false; return; }
         if (payImportRequiredMissingCount) { alert(`存在必填项为空 ${payImportRequiredMissingCount} 条，无法入库`); payImportCommitLock = false; return; }
         try { await loadContactsForImport(); } catch {}
         let createdCustomers = 0, createdMerchants = 0;
-        let covered = 0, inserted = 0;
+        let covered = 0, inserted = 0, blockedConfirmed = 0;
         const batchAt = Date.now();
         let batchOrder = 0;
         const beforeCustomers = new Set((contactsData.customers||[]).map(x => String(x.name||'').trim()));
@@ -3379,6 +3390,7 @@
           const hasKey = (rec.partner||'').trim() && (rec.doc||'').trim();
           if (hasKey) {
             const ex = findExistingPayRecord(rec);
+            if (ex && ex.confirmed) { blockedConfirmed++; return; }
             if (ex) { mergePayRecord(ex, rec); ex.batchAt = batchAt; ex.batchOrder = rec.batchOrder; ex.createdAt = batchAt; ex.source = 'import'; covered++; return; }
           }
           payRecords.push(rec); inserted++;
@@ -3387,7 +3399,7 @@
         payImportModal.style.display = 'none';
         payPage = 1;
         try {
-          await apiFetchJSON('/api/payables/import', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ records: payRecords.filter(r => r.batchAt === batchAt) }) });
+          const res = await apiFetchJSON('/api/payables/import', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ records: payRecords.filter(r => r.batchAt === batchAt) }) });
           payImportParsed = [];
           await loadPayablesFromServer();
           renderPayables();
@@ -3395,7 +3407,9 @@
           saveJSON('payRecords', payRecords);
           saveJSON('contactsData', contactsData);
           const totalChanged = inserted + covered + createdCustomers + createdMerchants;
-          alert(`导入完成：新增记录 ${inserted} 条，覆盖更新 ${covered} 条，新增客户 ${createdCustomers} 条，新增商家 ${createdMerchants} 条。`);
+          const blocked = Number(res?.blocked_confirmed || 0) + blockedConfirmed;
+          const msg = `导入完成：新增记录 ${inserted} 条，覆盖更新 ${covered} 条，新增客户 ${createdCustomers} 条，新增商家 ${createdMerchants} 条。` + (blocked ? `\n订单已确认，无法覆盖或修改 ${blocked} 条。` : '');
+          alert(msg);
         } catch {
           alert('导入失败，请检查权限或网络');
         }

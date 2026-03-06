@@ -385,65 +385,56 @@ app.get('/api/payables', authRequired, ensureAllow('payables','view'), async (re
 app.post('/api/payables', authRequired, ensureAllow('payables','create'), async (req, res) => {
   const p = normalizePayable({ ...req.body, source: req.body.source || 'manual' });
   if (!p.type || !p.partner || !p.doc || !Number.isFinite(p.amount)) return res.status(400).json({ error: 'bad_request' });
-  // upsert by (type, doc)
+  const ex = await query('select id, confirmed from payables where doc=$1 order by id desc limit 1', [p.doc]);
+  if (ex.rows[0]) {
+    if (ex.rows[0].confirmed) return res.status(400).json({ error: 'confirmed' });
+    const r = await query(`
+      update payables set
+        type=$1, partner=$2, doc=$3, amount=$4, paid=$5, settled=$6, trust_days=$7,
+        notes=$8, invoice_no=$9, invoice_date=$10, invoice_amount=$11, sales=$12,
+        date=$13, created_at=$14, batch_at=$15, batch_order=$16, source=$17, history=$18, confirmed=$19
+      where id=$20 and confirmed=false
+      returning id
+    `, [p.type,p.partner,p.doc,p.amount,p.paid,p.settled,p.trust_days,p.notes,p.invoice_no,p.invoice_date,p.invoice_amount,p.sales,p.date,p.created_at,p.batch_at,p.batch_order,p.source,JSON.stringify(p.history),p.confirmed,ex.rows[0].id]);
+    if (!r.rows[0]) return res.status(400).json({ error: 'confirmed' });
+    return res.json({ id: r.rows[0].id });
+  }
   const r = await query(`
     insert into payables(type,partner,doc,amount,paid,settled,trust_days,notes,invoice_no,invoice_date,invoice_amount,sales,date,created_at,batch_at,batch_order,source,history,confirmed)
     values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
-    on conflict (type, doc) do update set
-      partner=excluded.partner,
-      amount=excluded.amount,
-      paid=excluded.paid,
-      settled=excluded.settled,
-      trust_days=excluded.trust_days,
-      notes=excluded.notes,
-      invoice_no=excluded.invoice_no,
-      invoice_date=excluded.invoice_date,
-      invoice_amount=excluded.invoice_amount,
-      sales=excluded.sales,
-      date=excluded.date,
-      created_at=excluded.created_at,
-      batch_at=excluded.batch_at,
-      batch_order=excluded.batch_order,
-      source=excluded.source,
-      history=excluded.history,
-      confirmed=excluded.confirmed
-    returning *;
+    returning id;
   `, [p.type,p.partner,p.doc,p.amount,p.paid,p.settled,p.trust_days,p.notes,p.invoice_no,p.invoice_date,p.invoice_amount,p.sales,p.date,p.created_at,p.batch_at,p.batch_order,p.source,JSON.stringify(p.history),p.confirmed]);
   res.json({ id: r.rows[0].id });
 });
 
 app.post('/api/payables/import', authRequired, ensureAllow('payables','import'), async (req, res) => {
   const list = Array.isArray(req.body.records) ? req.body.records : [];
-  let inserted = 0, updated = 0;
+  let inserted = 0, updated = 0, blocked_confirmed = 0;
   for (const rec of list) {
     const p = normalizePayable(rec);
     if (!p.type || !p.partner || !p.doc || !Number.isFinite(p.amount)) continue;
-    const r = await query(`
+    const ex = await query('select id, confirmed from payables where doc=$1 order by id desc limit 1', [p.doc]);
+    if (ex.rows[0]) {
+      if (ex.rows[0].confirmed) { blocked_confirmed++; continue; }
+      const r = await query(`
+        update payables set
+          type=$1, partner=$2, doc=$3, amount=$4, paid=$5, settled=$6, trust_days=$7,
+          notes=$8, invoice_no=$9, invoice_date=$10, invoice_amount=$11, sales=$12,
+          date=$13, created_at=$14, batch_at=$15, batch_order=$16, source=$17, history=$18, confirmed=$19
+        where id=$20 and confirmed=false
+        returning id
+      `, [p.type,p.partner,p.doc,p.amount,p.paid,p.settled,p.trust_days,p.notes,p.invoice_no,p.invoice_date,p.invoice_amount,p.sales,p.date,p.created_at,p.batch_at,p.batch_order,p.source,JSON.stringify(p.history),p.confirmed,ex.rows[0].id]);
+      if (!r.rows[0]) { blocked_confirmed++; continue; }
+      updated++;
+      continue;
+    }
+    await query(`
       insert into payables(type,partner,doc,amount,paid,settled,trust_days,notes,invoice_no,invoice_date,invoice_amount,sales,date,created_at,batch_at,batch_order,source,history,confirmed)
       values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
-      on conflict (type, doc) do update set
-        partner=excluded.partner,
-        amount=excluded.amount,
-        paid=excluded.paid,
-        settled=excluded.settled,
-        trust_days=excluded.trust_days,
-        notes=excluded.notes,
-        invoice_no=excluded.invoice_no,
-        invoice_date=excluded.invoice_date,
-        invoice_amount=excluded.invoice_amount,
-        sales=excluded.sales,
-        date=excluded.date,
-        created_at=excluded.created_at,
-        batch_at=excluded.batch_at,
-        batch_order=excluded.batch_order,
-        source=excluded.source,
-        history=excluded.history,
-        confirmed=excluded.confirmed
-      returning xmax = 0 as inserted;
     `, [p.type,p.partner,p.doc,p.amount,p.paid,p.settled,p.trust_days,p.notes,p.invoice_no,p.invoice_date,p.invoice_amount,p.sales,p.date,p.created_at,p.batch_at,p.batch_order,p.source,JSON.stringify(p.history),p.confirmed]);
-    if (r.rows[0]?.inserted) inserted++; else updated++;
+    inserted++;
   }
-  res.json({ inserted, updated });
+  res.json({ inserted, updated, blocked_confirmed });
 });
 app.put('/api/payables/:id', authRequired, ensureAllow('payables','create'), async (req, res) => {
   const id = parseInt(req.params.id, 10) || 0;
