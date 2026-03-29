@@ -131,6 +131,7 @@
       #global-pager { position:fixed; left:50%; transform:translateX(-50%); bottom:16px; z-index:200; display:flex; gap:16px; align-items:center; justify-content:center; padding:10px 12px; border:1px solid #334155; border-radius:8px; background:#0f172a; box-shadow:0 8px 24px rgba(0,0,0,0.35); }
       #global-pager-controls { display:flex; gap:8px; align-items:center; }
       #pay-footer-info { display:flex; gap:10px; align-items:center; }
+      #ledger-footer-info { display:flex; gap:10px; align-items:center; }
       .info-pill { padding:2px 8px; border:1px solid var(--line); border-radius:6px; color:#cbd5e1; background:transparent; font-size:12px; line-height:1.2; }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -205,8 +206,12 @@
             </div>
             <div class="field" style="flex:1">
               <span class="label">关键词</span>
-              <input id="filter-key" type="text" placeholder="搜索关键词">
+              <input id="filter-key" type="text" placeholder="搜索关键词" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" inputmode="search" name="ledger-keyword" aria-autocomplete="none" data-form-type="other" data-lpignore="true">
             </div>
+            <button id="ledger-export" class="btn" style="margin-left:auto; display:flex; align-items:center; gap:6px">
+              <span style="display:inline-block; width:14px; height:14px; background:#22c55e; border-radius:3px"></span>
+              导出Excel
+            </button>
           </div>
           <div class="row" id="ledger-row" style="display:grid; grid-template-columns:1fr 280px; gap:24px">
             <div class="card">
@@ -234,7 +239,12 @@
                         </div>
                       </th>
                       <th style="background:#0f172a">金额</th>
-                      <th style="background:#0f172a">支付方式</th>
+                      <th id="ld-method" style="position:relative; cursor:pointer; background:#0f172a">
+                        <span id="ld-method-label">支付方式 ▾</span>
+                        <div id="ld-method-dd" class="dropdown" style="display:none; position:absolute; top:100%; left:0; min-width:160px; z-index:30">
+                          <div id="ld-method-list" class="dd-list"></div>
+                        </div>
+                      </th>
                       <th style="background:#0f172a">文件</th>
                       <th style="background:#0f172a">录入方式</th>
                       <th style="background:#0f172a">备注</th>
@@ -248,6 +258,7 @@
                 </table>
               </div>
               <div id="ledger-pager" style="display:none; gap:8px; align-items:center; justify-content:center; padding:12px 0"></div>
+              <div id="ledger-footer-info"></div>
             </div>
             <div class="card">
               <form class="form" id="entry-form">
@@ -535,7 +546,7 @@
                 <div class="summary-item">应付总额 <span id="sum-pay">0.00</span></div>
                 <div class="field" style="margin-left:auto; min-width:320px; display:flex; align-items:center; gap:8px;">
                   <span class="label">关键词</span>
-                  <input id="pay-filter-key" type="text" placeholder="搜索关键词" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" inputmode="text" name="pay-filter-key">
+                  <input id="pay-filter-key" type="text" placeholder="搜索关键词" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" inputmode="search" name="pay-keyword" aria-autocomplete="none" data-form-type="other" data-lpignore="true">
                 </div>
                 <button id="pay-export" class="btn" style="margin-left:8px; display:flex; align-items:center; gap:6px">
                   <span style="display:inline-block; width:14px; height:14px; background:#22c55e; border-radius:3px"></span>
@@ -1190,7 +1201,7 @@
       const filterKey = document.getElementById('filter-key');
       const filterStart = document.getElementById('filter-start');
       const filterEnd = document.getElementById('filter-end');
-      const ledgerPager = document.getElementById('global-pager-controls') || document.getElementById('ledger-pager');
+      const ledgerPager = document.getElementById('ledger-pager');
       const ledgerTableWrap = document.getElementById('ledger-table-wrap');
       const ldType = document.getElementById('ld-type');
       const ldTypeDD = document.getElementById('ld-type-dd');
@@ -1204,12 +1215,20 @@
       const ldOwnerDD = document.getElementById('ld-owner-dd');
       const ldOwnerList = document.getElementById('ld-owner-list');
       const ldOwnerLabel = document.getElementById('ld-owner-label');
+      const ldMethod = document.getElementById('ld-method');
+      const ldMethodDD = document.getElementById('ld-method-dd');
+      const ldMethodList = document.getElementById('ld-method-list');
+      const ldMethodLabel = document.getElementById('ld-method-label');
+      const ledgerExportBtn = document.getElementById('ledger-export');
       let ledgerPage = 1;
       const ledgerPageSize = 100;
+      let ledgerTotal = 0;
+      let ledgerQueryId = 0;
       function updateLedgerHeaderCover() {}
       let ledgerHdrType = 'all'; // '收入' | '开支' | 'all'
       let ledgerHdrCat = '';     // child category name or ''
       let ledgerHdrOwner = '';   // '客户' | '商家' | '其它'
+      let ledgerHdrMethod = '';  // 支付方式
       function clientOwner(name) {
         const all = [...contactsData.customers, ...contactsData.merchants, ...contactsData.others];
         const obj = all.find(x => (x.name||'') === (name||''));
@@ -1275,9 +1294,34 @@
         addItem('商家', '商家');
         addItem('其它往来单位', '其它');
       }
+      function openLedgerMethodFilter() {
+        ldMethodDD.style.display = 'block';
+        ldMethodList.innerHTML = '';
+        const addItem = (label, val) => {
+          const row = document.createElement('div'); row.className='dd-item'; row.textContent = label;
+          row.addEventListener('click', () => {
+            ledgerHdrMethod = val;
+            ldMethodDD.style.display='none';
+            if (ldMethodLabel) {
+              ldMethodLabel.textContent = (val ? val : '支付方式') + ' ▾';
+              ldMethodLabel.style.color = val ? '#ef4444' : '';
+            }
+            ledgerPage = 1;
+            applyFilters();
+          });
+          ldMethodList.appendChild(row);
+        };
+        addItem('全部', '');
+        const set = new Set();
+        accountsData.forEach(a => { if (a && a.name) set.add(a.name); });
+        const recs = records.length ? records : loadJSON('records', []);
+        recs.forEach(r => { if (r && r.method) set.add(r.method); });
+        [...set].forEach(n => addItem(n, n));
+      }
       ldType?.addEventListener('click', (e) => { e.stopPropagation(); openLedgerTypeFilter(); });
       ldCat?.addEventListener('click', (e) => { e.stopPropagation(); openLedgerCatFilter(); });
       ldOwner?.addEventListener('click', (e) => { e.stopPropagation(); openLedgerOwnerFilter(); });
+      ldMethod?.addEventListener('click', (e) => { e.stopPropagation(); openLedgerMethodFilter(); });
       const accRows = document.getElementById('acc-rows');
       const accAdd = document.getElementById('acc-add');
       const accountsData = [
@@ -1294,18 +1338,7 @@
         localStorage.setItem(key, JSON.stringify(val));
       }
       function initPersist() {
-        const recs = loadJSON('records', []);
-        if (Array.isArray(recs)) {
-          // 清理已失效的 blob: 临时链接，避免刷新后报错
-          recs.forEach(r => { if (r && typeof r.fileUrl === 'string' && /^blob:/i.test(r.fileUrl)) delete r.fileUrl; });
-          recs.forEach(r => {
-            if (r && !r.createdAt) {
-              const ts = Date.parse(r.dateTime || r.date || '');
-              if (!isNaN(ts)) r.createdAt = ts;
-            }
-          });
-          records.splice(0, records.length, ...recs);
-        }
+        try { localStorage.removeItem('records'); } catch {}
         const pays = loadJSON('payRecords', []);
         if (Array.isArray(pays)) {
           pays.forEach(r => {
@@ -1471,7 +1504,6 @@
         refreshAccountOptions();
         renderAccounts();
         saveJSON('accountsData', accountsData);
-        saveJSON('records', records);
       });
       accDeleteCancel?.addEventListener('click', () => {
         accDeleteModal.style.display = 'none';
@@ -1700,6 +1732,33 @@
         ledgerEditingId = null;
         if (entrySubmitBtn) entrySubmitBtn.textContent = '提交';
       }
+      async function ensureLedgerFile(r) {
+        if (r.fileUrl || !r.hasFile || !r.id) return r;
+        try {
+          const data = await apiFetchJSON('/api/ledger/file/' + String(r.id));
+          r.fileUrl = data?.dataUrl || '';
+          if (data?.name) r.fileName = data.name;
+          if (data?.type) r.fileType = data.type;
+        } catch {}
+        return r;
+      }
+      function openLedgerFile(r) {
+        if (!r.fileUrl) return;
+        if ((r.fileType || '').includes('pdf') || /\.pdf$/i.test(r.fileName||'')) {
+          fileViewerBox.innerHTML = '';
+          const emb = document.createElement('embed');
+          emb.src = r.fileUrl;
+          emb.type = 'application/pdf';
+          fileViewerBox.appendChild(emb);
+          fileViewer.style.display = 'flex';
+        } else {
+          fileViewerBox.innerHTML = '';
+          const full = document.createElement('img');
+          full.src = r.fileUrl;
+          fileViewerBox.appendChild(full);
+          fileViewer.style.display = 'flex';
+        }
+      }
       function render(data) {
         rows.innerHTML = '';
         if (!data.length) {
@@ -1714,8 +1773,8 @@
         }
         for (const r of data) {
           const tr = document.createElement('tr');
-          const canEdit = r.confirmed === false && r.id && can('payables','edit');
-          const canConfirm = r.confirmed === false && r.id && can('payables','create');
+          const canEdit = r.confirmed === false && r.id && can('ledger','edit');
+          const canConfirm = r.confirmed === false && r.id && can('ledger','create');
           const amt = (r.type === '开支' || r.type === '支出') ? (-r.amount).toFixed(2) : r.amount.toFixed(2);
           const makeTd = (text) => {
             const td = document.createElement('td');
@@ -1734,29 +1793,28 @@
               const span = document.createElement('span');
               span.className = 'thumb-pdf';
               span.textContent = 'PDF';
-              span.addEventListener('click', () => {
-                fileViewerBox.innerHTML = '';
-                const emb = document.createElement('embed');
-                emb.src = r.fileUrl;
-                emb.type = 'application/pdf';
-                fileViewerBox.appendChild(emb);
-                fileViewer.style.display = 'flex';
-              });
+              span.addEventListener('click', () => openLedgerFile(r));
               tdFile.appendChild(span);
             } else {
               const img = document.createElement('img');
               img.className = 'thumb-img';
               img.src = r.fileUrl;
               img.alt = r.fileName || '附件';
-              img.addEventListener('click', () => {
-                fileViewerBox.innerHTML = '';
-                const full = document.createElement('img');
-                full.src = r.fileUrl;
-                fileViewerBox.appendChild(full);
-                fileViewer.style.display = 'flex';
-              });
+              img.addEventListener('click', () => openLedgerFile(r));
               tdFile.appendChild(img);
             }
+          } else if (r.hasFile) {
+            const a = document.createElement('a');
+            a.href = '#';
+            a.textContent = r.fileName || '查看';
+            a.className = 'link-blue';
+            a.addEventListener('click', async e => {
+              e.preventDefault();
+              await ensureLedgerFile(r);
+              if (!r.fileUrl) { alert('读取文件失败'); return; }
+              openLedgerFile(r);
+            });
+            tdFile.appendChild(a);
           } else {
             tdFile.textContent = r.file ? r.file : '-';
           }
@@ -1778,7 +1836,7 @@
               try {
                 await apiFetchJSON('/api/ledger/' + String(r.id) + '/confirm', { method:'PUT' });
                 clearLedgerEdit();
-                loadLedgerFromServer();
+                applyFilters();
                 loadPayablesFromServer();
                 apiAccountsList().then(() => { refreshAccountOptions(); renderAccounts(); });
               } catch {}
@@ -1793,45 +1851,37 @@
       function getFilters() {
         const t = filterType.value;
         const key = filterKey.value.trim();
-        const s = filterStart.value ? new Date(filterStart.value) : null;
-        const e = filterEnd.value ? new Date(filterEnd.value) : null;
+        const s = filterStart.value ? filterStart.value : '';
+        const e = filterEnd.value ? filterEnd.value : '';
         return { t, key, s, e };
       }
-      function applyFilters() {
+      async function applyFilters() {
+        const qid = ++ledgerQueryId;
         const { t, key, s, e } = getFilters();
-        const outAll = records.filter(r => {
-          if (t !== 'all' && r.type !== t) return false;
-          if (ledgerHdrType !== 'all') {
-            if (ledgerHdrType === '开支') { if (!(r.type === '开支' || r.type === '支出')) return false; }
-            else if (r.type !== ledgerHdrType) return false;
-          }
-          if (ledgerHdrCat && r.category !== ledgerHdrCat) return false;
-          if (ledgerHdrOwner) {
-            const owner = clientOwner(r.client || '');
-            if (owner !== ledgerHdrOwner) return false;
-          }
-          if (key && !((r.client||'').includes(key) || (r.notes||'').includes(key))) return false;
-          const d = new Date(r.date);
-          if (s && d < s) return false;
-          if (e && d > e) return false;
-          return true;
-        });
-        function ts(r) {
-          const t1 = r.createdAt || 0;
-          const t2 = r.dateTime ? Date.parse(r.dateTime) : 0;
-          const t3 = r.date ? Date.parse(r.date) : 0;
-          return t1 || t2 || t3 || 0;
+        const typeFinal = ledgerHdrType !== 'all' ? ledgerHdrType : t;
+        const params = new URLSearchParams();
+        params.set('page', String(ledgerPage));
+        params.set('pageSize', String(ledgerPageSize));
+        if (typeFinal && typeFinal !== 'all') params.set('type', typeFinal);
+        if (ledgerHdrCat) params.set('category', ledgerHdrCat);
+        if (ledgerHdrOwner) params.set('owner', ledgerHdrOwner);
+        if (ledgerHdrMethod) params.set('method', ledgerHdrMethod);
+        if (key) params.set('q', key);
+        if (s) params.set('start', s);
+        if (e) params.set('end', e);
+        await loadLedgerFromServer(params.toString());
+        if (qid !== ledgerQueryId) return;
+        let viewRecords = records;
+        if (ledgerHdrMethod) {
+          const m = String(ledgerHdrMethod || '').trim();
+          if (m) viewRecords = records.filter(r => String(r.method || '').trim() === m);
         }
-        outAll.sort((a,b) => ts(b) - ts(a));
-        const total = outAll.length;
+        const total = ledgerHdrMethod ? viewRecords.length : (ledgerTotal || records.length);
         const totalPages = Math.max(1, Math.ceil(total / ledgerPageSize));
         if (ledgerPage > totalPages) ledgerPage = totalPages;
-        const startIdx = (ledgerPage - 1) * ledgerPageSize;
-        const out = outAll.slice(startIdx, startIdx + ledgerPageSize);
-        render(out);
+        render(viewRecords);
         if (ledgerTableWrap) ledgerTableWrap.scrollTop = 0;
         updateLedgerHeaderCover();
-        const gp = document.getElementById('global-pager'); if (gp) gp.style.display = 'flex';
         if (ledgerPager) {
           ledgerPager.innerHTML = '';
           ledgerPager.style.display = 'flex';
@@ -1856,26 +1906,52 @@
           for (let p = start; p <= end; p++) makeBtn(String(p), p, false, p===ledgerPage);
           makeBtn('»', Math.min(totalPages, ledgerPage+1), ledgerPage>=totalPages);
         }
-        const infoEl = document.getElementById('pay-footer-info');
+        const infoEl = document.getElementById('ledger-footer-info');
         if (infoEl) {
-          const totalCount = (records || []).length;
+          const totalCount = total;
           const todayStr = (() => { const d = new Date(); const y=d.getFullYear(); const m=String(d.getMonth()+1).padStart(2,'0'); const dd=String(d.getDate()).padStart(2,'0'); return `${y}-${m}-${dd}`; })();
           const toTs = r => r.createdAt || (r.dateTime ? Date.parse(r.dateTime) : 0) || (r.date ? Date.parse(r.date) : 0) || 0;
           const todayCount = (records || []).filter(r => {
-            const t = toTs(r); if (!t) return false;
-            const d = new Date(t); const y=d.getFullYear(); const m=String(d.getMonth()+1).padStart(2,'0'); const dd=String(d.getDate()).padStart(2,'0');
+            const t2 = toTs(r); if (!t2) return false;
+            const d = new Date(t2); const y=d.getFullYear(); const m=String(d.getMonth()+1).padStart(2,'0'); const dd=String(d.getDate()).padStart(2,'0');
             return `${y}-${m}-${dd}` === todayStr;
           }).length;
           const latestTs = Math.max(0, ...((records||[]).map(toTs)));
           const latestCount = latestTs ? (records || []).filter(r => toTs(r) === latestTs).length : 0;
-          const mk = (text) => { const s = document.createElement('span'); s.className = 'info-pill'; s.textContent = text; return s; };
+          const mk = (text) => { const s2 = document.createElement('span'); s2.className = 'info-pill'; s2.textContent = text; return s2; };
           infoEl.innerHTML = '';
           infoEl.appendChild(mk(`共 ${totalCount} 条记录`));
           infoEl.appendChild(mk(`今日上传 ${todayCount} 条`));
           infoEl.appendChild(mk(`最后次上传 ${latestCount || 1} 条`));
         }
       }
-      filterKey.addEventListener('input', applyFilters);
+      filterKey.addEventListener('input', () => { ledgerPage = 1; applyFilters(); });
+      ledgerExportBtn?.addEventListener('click', () => {
+        let data = records || [];
+        if (ledgerHdrMethod) {
+          const m = String(ledgerHdrMethod || '').trim();
+          if (m) data = data.filter(r => String(r.method || '').trim() === m);
+        }
+        if (!data.length) { alert('当前页面无记录可导出'); return; }
+        const rows = [];
+        rows.push(['类型','子类目','单据/凭证号','往来单位','金额','支付方式','文件','录入方式','备注','日期']);
+        data.forEach(r => {
+          const amt = (r.type === '开支' || r.type === '支出') ? (-(r.amount||0)).toFixed(2) : (r.amount||0).toFixed(2);
+          rows.push([r.type || '', r.category || '', r.doc || '', r.client || '', amt, r.method || '', r.fileName || r.file || '', r.entry || '', r.notes || '', r.date || '']);
+        });
+        let html = '<html><head><meta charset="UTF-8"></head><body><table border="1">';
+        rows.forEach(r => { html += '<tr>' + r.map(c => `<td>${String(c).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</td>`).join('') + '</tr>'; });
+        html += '</table></body></html>';
+        const blob = new Blob([html], { type: 'application/vnd.ms-excel;charset=UTF-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `收支记账_${new Date().toISOString().slice(0,10)}.xls`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      });
       function setLedgerTypeFilter(val) {
         const v = val || 'all';
         if (filterType) filterType.value = v;
@@ -1900,8 +1976,8 @@
         try {
           await apiFetchJSON('/api/ledger', { method:'DELETE' });
           records.splice(0, records.length);
-          saveJSON('records', records);
-          loadLedgerFromServer();
+          ledgerPage = 1;
+          applyFilters();
           loadPayablesFromServer();
           apiAccountsList().then(() => { refreshAccountOptions(); renderAccounts(); });
           renderContacts();
@@ -1921,6 +1997,14 @@
           alert('清空失败，请检查权限或网络');
         }
       });
+      function readFileAsDataURL(file) {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result || ''));
+          reader.onerror = () => reject(new Error('read_failed'));
+          reader.readAsDataURL(file);
+        });
+      }
       document.getElementById('entry-form').addEventListener('submit', async e => {
         e.preventDefault();
         [document.getElementById('entry-doc'), entryClient, entryAmount, entryMethod].forEach(el => el?.classList.remove('invalid'));
@@ -1959,31 +2043,42 @@
         const now = new Date();
         const date = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
         const dateTime = `${date} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')}`;
-        const rec = { type, category, doc, client: clientVal, amount, method, file, entry:'手动', notes: entryNotes.value.trim(), date, dateTime, createdAt: Date.now(), confirmed: false };
+        let filePayload = '';
+        let fileUrl = '';
+        let fileName = '';
+        let fileType = '';
         if (fileObj) {
           const extOk = /(\.jpe?g|\.pdf)$/i.test(fileObj.name);
           if (!extOk) { alert('仅支持 JPG 或 PDF 文件'); return; }
-          rec.fileType = fileObj.type || '';
-          rec.fileName = fileObj.name;
-          rec.fileUrl = URL.createObjectURL(fileObj);
+          try {
+            fileUrl = await readFileAsDataURL(fileObj);
+            fileName = fileObj.name;
+            fileType = fileObj.type || '';
+            filePayload = JSON.stringify({ name: fileName, type: fileType, dataUrl: fileUrl });
+          } catch {
+            alert('读取文件失败');
+            return;
+          }
         }
+        const rec = { type, category, doc, client: clientVal, amount, method, file: fileName, entry:'手动', notes: entryNotes.value.trim(), date, dateTime, createdAt: Date.now(), confirmed: false, fileUrl, fileName, fileType };
         try {
           if (ledgerEditingId) {
             await apiFetchJSON('/api/ledger/' + String(ledgerEditingId), {
               method:'PUT',
               headers:{'Content-Type':'application/json'},
-              body: JSON.stringify({ type, category, doc, client: clientVal, amount, method, file:'', notes: rec.notes || '', date, dateTime, createdBy: (getAuthUser()?.name || '') })
+              body: JSON.stringify({ type, category, doc, client: clientVal, amount, method, file: filePayload, notes: rec.notes || '', date, dateTime, createdBy: (getAuthUser()?.name || '') })
             });
             clearLedgerEdit();
           } else {
             await apiFetchJSON('/api/ledger', {
               method:'POST',
               headers:{'Content-Type':'application/json'},
-              body: JSON.stringify({ type, category, doc, client: clientVal, amount, method, file:'', notes: rec.notes || '', date, dateTime, createdBy: (getAuthUser()?.name || ''), confirmed:false })
+              body: JSON.stringify({ type, category, doc, client: clientVal, amount, method, file: filePayload, notes: rec.notes || '', date, dateTime, createdBy: (getAuthUser()?.name || ''), confirmed:false })
             });
           }
         } catch {}
-        loadLedgerFromServer();
+        ledgerPage = 1;
+        applyFilters();
         document.getElementById('entry-doc').value = '';
         entryClient.value = '';
         entryAmount.value = '';
@@ -1993,11 +2088,6 @@
         [document.getElementById('entry-doc'), entryClient, entryAmount, entryMethod].forEach(el => el?.classList.remove('invalid'));
         ledgerPage = 1;
         applyFilters();
-        // 持久化时不保存 fileUrl（blob: 为会话临时链接，刷新后失效）
-        saveJSON('records', records.map(r => {
-          const { fileUrl, ...rest } = r;
-          return rest;
-        }));
         saveJSON('accountsData', accountsData);
         if (document.getElementById('page-home')?.style.display === 'block') renderHomeChart('month');
       });
@@ -2166,6 +2256,13 @@
       let payFilterStatus = 'all';
       let payFilterType = 'all'; // recv | pay | all
       let payFilterOverdue = 'all'; // overdue | not | all
+      if (payFilterKey) {
+        payFilterKey.setAttribute('readonly', 'readonly');
+        setTimeout(() => {
+          payFilterKey.removeAttribute('readonly');
+          if (payFilterKey.value) { payFilterKey.value = ''; payPage = 1; renderPayables(); }
+        }, 1200);
+      }
       let payPage = 1;
       const payPageSize = 100;
       function setLabel(el, text, active) {
@@ -2315,6 +2412,7 @@
         if (!ldType?.contains(e.target)) ldTypeDD.style.display = 'none';
         if (!ldCat?.contains(e.target)) ldCatDD.style.display = 'none';
         if (!ldOwner?.contains(e.target)) ldOwnerDD.style.display = 'none';
+        if (!ldMethod?.contains(e.target)) ldMethodDD.style.display = 'none';
       });
       const payHistoryModal = document.getElementById('pay-history-modal');
       const payHistoryHead = document.getElementById('pay-history-head');
@@ -2325,6 +2423,21 @@
       const payHistoryNotesAdd = document.getElementById('pay-history-notes-add');
       let payHistoryCurrentRec = null;
       function openPayHistory(rec) {
+        if (rec && rec.id && rec.historyLoaded === false) {
+          payHistoryHead.innerHTML = `单据号：${rec.doc || ''}　往来单位：${rec.partner || ''}　金额：${(rec.amount||0).toFixed(2)}`;
+          payHistoryNotesText.textContent = rec.notes || '';
+          payHistoryList.innerHTML = '';
+          const div = document.createElement('div'); div.textContent = '加载中...';
+          payHistoryList.appendChild(div);
+          payHistoryModal.style.display = 'flex';
+          apiFetchJSON('/api/payables/' + String(rec.id)).then(full => {
+            rec.history = full.history || [];
+            rec.notes = full.notes || rec.notes || '';
+            rec.historyLoaded = true;
+            openPayHistory(rec);
+          }).catch(() => {});
+          return;
+        }
         const total = (rec.amount || 0);
         const paid = (rec.paid || 0);
         const arrears = Math.max(0, total - paid);
@@ -2488,7 +2601,7 @@
           const keyLower = key.toLowerCase();
           let out = payRecords.filter(r => {
             if (!key) return true;
-            return [r.partner||'', r.doc||'', r.notes||''].some(v => String(v || '').toLowerCase().includes(keyLower));
+            return [r.partner||'', r.doc||'', r.notes||'', r.invoiceNo||''].some(v => String(v || '').toLowerCase().includes(keyLower));
           });
           if (payFilterType !== 'all') {
             out = out.filter(r => (payFilterType === 'recv' ? /应收/.test(r.type) : /应付/.test(r.type)));
@@ -2839,7 +2952,7 @@
           paySubmitLock = false;
           return;
         }
-        if (!refundMode && payDocExists(doc, type, payEditingId)) {
+        if (!refundMode && payDocExists(doc, payEditingId)) {
           setPayDocInvalid(true);
           alert('凭证号已存在');
           paySubmitLock = false;
@@ -4364,11 +4477,14 @@
         if (!r.ok) throw new Error('network_error');
         return await r.json();
       }
-      async function loadLedgerFromServer() {
+      async function loadLedgerFromServer(query) {
         try {
-          const list = await apiFetchJSON('/api/ledger');
-          if (Array.isArray(list)) {
-            records.splice(0, records.length, ...list.map(r => {
+          const url = query ? ('/api/ledger?' + query) : '/api/ledger';
+          const list = await apiFetchJSON(url);
+          const items = Array.isArray(list?.items) ? list.items : (Array.isArray(list) ? list : []);
+          ledgerTotal = Number(list?.total || 0) || (Array.isArray(items) ? items.length : 0);
+          if (Array.isArray(items)) {
+            records.splice(0, records.length, ...items.map(r => {
               const createdRaw = Number(r.created_at);
               const createdAt = Number.isFinite(createdRaw) && createdRaw > 0 ? createdRaw : (Date.parse(r.date_time || r.date || '') || Date.now());
               return {
@@ -4386,11 +4502,13 @@
                 createdAt,
                 createdBy: r.created_by || '',
                 confirmed: r.confirmed !== false,
-                entry: '手动'
+                entry: '手动',
+                fileUrl: '',
+                fileName: r.file_name || '',
+                fileType: r.file_type || '',
+                hasFile: !!r.has_file
               };
             }));
-            saveJSON('records', records);
-            applyFilters();
             const hm = document.getElementById('page-home');
             if (hm && hm.style.display === 'block') renderHomeChart(homePeriodSel?.value || 'month');
           }
@@ -4398,7 +4516,7 @@
       }
       async function loadPayablesFromServer() {
         try {
-          const list = await apiFetchJSON('/api/payables');
+          const list = await apiFetchJSON('/api/payables?slim=1');
           if (Array.isArray(list)) {
             payRecords.splice(0, payRecords.length, ...list.map(r => {
               const createdRaw = Number(r.created_at);
@@ -4412,11 +4530,11 @@
                 createdAt, invoiceNo: r.invoice_no || '',
                 invoiceDate: r.invoice_date || '', invoiceAmount: Number(r.invoice_amount||0),
                 source: r.source || 'import', batchAt: r.batch_at || 0, batchOrder: r.batch_order ?? 0,
-                confirmed: r.confirmed !== false
+                confirmed: r.confirmed !== false, historyLoaded: false
               };
             }));
             saveJSON('payRecords', payRecords);
-            renderPayables();
+            if (location.hash === '#payables') renderPayables();
           }
         } catch {}
       }
@@ -4776,12 +4894,22 @@
             ledgerHdrType = 'all';
             ledgerHdrCat = '';
             ledgerHdrOwner = '';
+            ledgerHdrMethod = '';
             setLabel(document.getElementById('ld-type-label'), '类型', false);
             setLabel(document.getElementById('ld-cat-label'), '子类目', false);
             setLabel(document.getElementById('ld-owner-label'), '往来单位', false);
+            if (ldMethodLabel) { ldMethodLabel.textContent = '支付方式 ▾'; ldMethodLabel.style.color = ''; }
             setLedgerTypeFilter('all');
+            if (filterKey) filterKey.value = '';
+            if (filterKey) {
+              filterKey.setAttribute('readonly', 'readonly');
+              setTimeout(() => {
+                filterKey.removeAttribute('readonly');
+                if (filterKey.value) { filterKey.value = ''; ledgerPage = 1; applyFilters(); }
+              }, 1200);
+            }
           } catch {}
-          await loadLedgerFromServer();
+          ledgerPage = 1;
           applyFilters();
         } else if (hash === '#payables') {
           if (home) home.style.display = 'none';
@@ -4805,6 +4933,13 @@
             payFilterOverdue = 'all';
             payPage = 1;
             if (payFilterKey) payFilterKey.value = '';
+            if (payFilterKey) {
+              payFilterKey.setAttribute('readonly', 'readonly');
+              setTimeout(() => {
+                payFilterKey.removeAttribute('readonly');
+                if (payFilterKey.value) { payFilterKey.value = ''; payPage = 1; renderPayables(); }
+              }, 1200);
+            }
             const setDefault = () => {
               const reset = (el, text) => { if (el) { el.textContent = text + ' ▾'; el.style.color = ''; } };
               reset(document.getElementById('th-type-label'), '款项类型');
@@ -4997,9 +5132,8 @@
       });
       initPersist();
       setAuthUI();
-      loadLedgerFromServer();
-      loadPayablesFromServer();
-      applyFilters();
+      ledgerPage = 1;
+      route();
       window.addEventListener('resize', updateLedgerHeaderCover);
       document.getElementById('partner-orders-back')?.addEventListener('click', () => { location.hash = '#contacts'; });
       renderContacts();

@@ -370,16 +370,26 @@ function normalizePayable(rec) {
 }
 
 app.get('/api/payables', authRequired, ensureAllow('payables','view'), async (req, res) => {
-  const { q, type } = req.query;
+  const { q, type, slim } = req.query;
   const params = [];
-  let sql = 'select * from payables';
+  const isSlim = String(slim || '') === '1';
+  let sql = isSlim
+    ? 'select id,type,partner,doc,amount,paid,settled,trust_days,notes,invoice_no,invoice_date,invoice_amount,sales,date,created_at,batch_at,batch_order,source,confirmed from payables'
+    : 'select * from payables';
   const conds = [];
   if (type && (type === '应收账款' || type === '应付账款')) { params.push(type); conds.push(`type=$${params.length}`); }
   if (q) { params.push(`%${q}%`); conds.push(`(partner ilike $${params.length} or doc ilike $${params.length})`); }
   if (conds.length) sql += ' where ' + conds.join(' and ');
   sql += ' order by batch_at desc nulls last, batch_order asc nulls last, created_at desc';
   const r = await query(sql, params);
-  res.json(r.rows);
+  if (!isSlim) return res.json(r.rows);
+  res.json(r.rows.map(x => ({ ...x, history: [] })));
+});
+app.get('/api/payables/:id', authRequired, ensureAllow('payables','view'), async (req, res) => {
+  const id = parseInt(req.params.id, 10) || 0;
+  const r = await query('select * from payables where id=$1', [id]);
+  if (!r.rows[0]) return res.status(404).json({ error:'not_found' });
+  res.json(r.rows[0]);
 });
 
 app.post('/api/payables', authRequired, ensureAllow('payables','create'), async (req, res) => {
@@ -476,8 +486,55 @@ app.delete('/api/payables', authRequired, ensureAllow('payables','delete'), asyn
 });
 
 app.get('/api/ledger', authRequired, ensureAllow('ledger','view'), async (req, res) => {
-  const r = await query('select * from ledger order by created_at desc nulls last, id desc');
-  res.json(r.rows);
+  const { page='1', pageSize='100', type='', category='', owner='', method='', q='', start='', end='' } = req.query || {};
+  const p = Math.max(1, parseInt(page, 10) || 1);
+  const size = Math.min(500, Math.max(1, parseInt(pageSize, 10) || 100));
+  const offset = (p - 1) * size;
+  const params = [];
+  const useOwner = !!owner;
+  let sql = `select l.id,l.type,l.category,l.doc,l.client,l.amount,l.method,l.notes,l.date,l.date_time,l.created_at,l.created_by,l.confirmed,
+    (case when l.file is not null and l.file <> '' then true else false end) as has_file,
+    count(*) over() as total
+    from ledger l`;
+  if (useOwner) sql += ' left join contacts c on c.name = l.client';
+  const conds = [];
+  if (type) {
+    if (type === '开支' || type === '支出') {
+      conds.push(`l.type in ('开支','支出')`);
+    } else {
+      params.push(type);
+      conds.push(`l.type=$${params.length}`);
+    }
+  }
+  if (category) { params.push(category); conds.push(`l.category=$${params.length}`); }
+  if (useOwner) { params.push(owner); conds.push(`c.owner=$${params.length}`); }
+  if (method) { params.push(method); conds.push(`trim(l.method)=trim($${params.length})`); }
+  if (q) { params.push(`%${q}%`); conds.push(`(l.client ilike $${params.length} or l.notes ilike $${params.length} or l.doc ilike $${params.length})`); }
+  if (start) { params.push(start); conds.push(`l.date >= $${params.length}`); }
+  if (end) { params.push(end); conds.push(`l.date <= $${params.length}`); }
+  if (conds.length) sql += ' where ' + conds.join(' and ');
+  sql += ' order by l.created_at desc nulls last, l.id desc';
+  params.push(size);
+  params.push(offset);
+  sql += ` limit $${params.length-1} offset $${params.length}`;
+  const r = await query(sql, params);
+  const total = r.rows[0] ? Number(r.rows[0].total || 0) : 0;
+  const items = r.rows.map(({ total, ...rest }) => {
+    return { ...rest, file: '', file_name: '', file_type: '', has_file: !!rest.has_file };
+  });
+  res.json({ items, total });
+});
+app.get('/api/ledger/file/:id', authRequired, ensureAllow('ledger','view'), async (req, res) => {
+  const id = parseInt(req.params.id, 10) || 0;
+  const r = await query('select file from ledger where id=$1', [id]);
+  const raw = r.rows[0]?.file || '';
+  if (!raw) return res.status(404).json({ error:'not_found' });
+  if (typeof raw === 'string' && raw.startsWith('data:')) return res.json({ dataUrl: raw });
+  try {
+    const obj = JSON.parse(raw);
+    if (obj && obj.dataUrl) return res.json({ dataUrl: obj.dataUrl, name: obj.name || '', type: obj.type || '' });
+  } catch {}
+  res.status(404).json({ error:'not_found' });
 });
 async function applyLedgerEffects(x) {
   if (x.doc && x.type) {
