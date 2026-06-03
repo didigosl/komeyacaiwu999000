@@ -503,7 +503,7 @@
         <div class="brand" style="padding:0; display:flex !important"><span class="logo"></span><span>KOMEYA 财务管理</span></div>
         <div class="mobile-menu-btn" onclick="toggleSidebar()">☰</div>
       </div>
-      <div class="app-version" style="position:fixed; bottom:4px; right:4px; font-size:10px; color:#334155; pointer-events:none; z-index:9999">v20260406-test25</div>
+      <div id="app-version" class="app-version" style="position:fixed; bottom:4px; right:4px; font-size:10px; color:#334155; pointer-events:none; z-index:9999">v</div>
       <aside class="sidebar">
         <div class="brand"><span class="logo"></span><span>KOMEYA 财务管理</span></div>
         <nav class="nav">
@@ -533,6 +533,7 @@
             </div>
             <div class="nav-children collapsed">
               <a href="#sales-order">出单系统</a>
+              <a href="#sales-albaran">送货单Albaran</a>
               <a href="#sales-invoice">发票</a>
               <a href="#sales-products">商品列表</a>
               <a href="#sales-stats">商品销售统计</a>
@@ -1643,6 +1644,10 @@
                 <button class="btn-secondary" onclick="downloadLedgerTemplate()" style="white-space:nowrap">Excel模板</button>
               </div>
             </div>
+            <button id="ledger-export" class="btn" style="margin-left:auto; display:flex; align-items:center; gap:6px; white-space:nowrap">
+              <span style="display:inline-block; width:14px; height:14px; background:#22c55e; border-radius:3px"></span>
+              导出Excel
+            </button>
           </div>
           <div class="row" id="ledger-row" style="display:grid; grid-template-columns:1fr 280px; gap:24px">
             <div class="card">
@@ -2840,13 +2845,19 @@
           <div class="card" style="padding:24px">
             <div class="light-top">
               <h3>出单系统</h3>
-              <div id="so-invoice-no" style="font-weight:600; color:var(--blue); font-size:16px">--</div>
+              <div style="position:relative">
+                <div id="so-invoice-no" style="font-weight:600; color:var(--blue); font-size:16px; cursor:pointer; user-select:none">-- ▾</div>
+                <div id="so-doc-dd" class="dropdown" style="display:none; right:0; top:28px; min-width:220px">
+                  <div class="dd-list" id="so-doc-list"></div>
+                </div>
+              </div>
             </div>
             <div class="form" style="padding:0">
               <div style="display:flex; gap:12px; align-items:flex-end; margin-bottom:12px">
                 <div style="flex:5">
                   <div style="display:flex; align-items:center">
                     <span class="label">* 往来单位 (客户)</span>
+                    <span id="so-arrears" style="flex:1; text-align:center; color:#ef4444; font-weight:700; font-size:13px"></span>
                     <span id="so-customer-remark" style="color:var(--red); margin-left:12px; font-weight:600; font-size:13px"></span>
                   </div>
                   <div class="select">
@@ -2883,23 +2894,18 @@
                   </select>
                 </div>
               </div>
-              <div style="margin-top:24px">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px">
-                  <h4 style="margin:0; font-size:15px; color:#e2e8f0">商品明细</h4>
-                  <button id="so-add-item" class="btn">+ 添加商品</button>
-                </div>
-                
+              <div style="margin-top:12px">
                 <div style="background:#0f172a; border-radius:8px; overflow:hidden; border:1px solid #1e293b">
                   <table style="width:100%; border-collapse:collapse; color:#cbd5e1; font-size:13px">
                     <thead style="background:#1e293b; color:#94a3b8; font-weight:500">
                       <tr>
-                        <th style="padding:10px 16px; text-align:left; width:15%">商品名称</th>
-                        <th style="padding:10px 16px; text-align:left; width:15%">中文名称</th>
-                        <th style="padding:10px 16px; text-align:left; width:15%">规格</th>
+                        <th style="padding:10px 16px; text-align:left; width:12%">编号</th>
+                        <th style="padding:10px 16px; text-align:left; width:32%">名称</th>
+                        <th style="padding:10px 16px; text-align:left; width:10%">规格</th>
                         <th style="padding:10px 16px; text-align:right; width:10%">数量</th>
                         <th style="padding:10px 16px; text-align:right; width:10%">单价</th>
-                        <th style="padding:10px 16px; text-align:right; width:10%">IVA</th>
-                        <th style="padding:10px 16px; text-align:right; width:15%">金额</th>
+                        <th style="padding:10px 16px; text-align:right; width:8%">IVA</th>
+                        <th style="padding:10px 16px; text-align:right; width:13%">金额</th>
                         <th style="padding:10px 16px; text-align:center; width:60px">操作</th>
                       </tr>
                     </thead>
@@ -2961,7 +2967,7 @@
         <div id="page-sales-invoice" style="display:none">
           <div class="card" style="padding:24px">
             <div class="light-top">
-              <h3>发票列表</h3>
+              <h3 id="inv-page-title">发票列表</h3>
               <div class="field">
                 <input type="text" id="inv-search" class="light-input" placeholder="搜索发票号/客户/公司名称/发票金额..." style="width:320px">
                 <button id="inv-refresh" class="light-btn">刷新</button>
@@ -2972,7 +2978,7 @@
                 <thead>
                   <tr>
                     <th>序号</th>
-                    <th>发票号</th>
+                    <th id="inv-th-no">发票号</th>
                     <th>客户</th>
                     <th>公司名称</th>
                     <th>日期</th>
@@ -3320,7 +3326,7 @@
     <div id="invoice-preview-modal" class="modal-overlay" style="display:none">
       <div class="modal" style="width:900px; max-width:95vw; background:#525659; overflow-y:auto; max-height:90vh">
         <div class="modal-header" style="background:#323639; color:white; border-bottom:1px solid #000">
-          <div class="modal-title">发票预览</div>
+          <div class="modal-title" id="inv-preview-title">发票预览</div>
           <div style="display:flex; gap:10px">
             <button id="inv-prev-print" class="light-btn">打印 / 导出PDF</button>
             <button id="inv-prev-close" class="btn-secondary" style="background:#323639; color:white; border:1px solid #5f6368">关闭</button>
@@ -3330,7 +3336,7 @@
           <div id="invoice-preview-stage" class="invoice-preview-stage">
           <div id="invoice-paper" class="invoice-paper">
             <div class="inv-meta-right">
-              <h1>FACTURA</h1>
+              <h1 id="prev-doc-title">FACTURA</h1>
               <div style="font-weight:700"># <span id="prev-no"></span></div>
               <div class="inv-status" id="prev-status">POR PAGAR</div>
             </div>
@@ -3345,7 +3351,7 @@
             </div>
 
             <div class="dates-grid">
-              Fecha de la factura: <span id="prev-date"></span><br>
+              <span id="prev-date-label">Fecha de la factura:</span> <span id="prev-date"></span><br>
               <span id="prev-sales" style="color:#000;"></span>
             </div>
             
@@ -3353,7 +3359,7 @@
               <thead>
                 <tr>
                   <th class="item-idx">#</th>
-                  <th>Artículo</th>
+                  <th id="prev-th-article">Artículo</th>
                   <th width="80" style="text-align:right">Cantidad</th>
                   <th width="100" style="text-align:right">Precio</th>
                   <th width="100" style="text-align:right">Impuesto</th>
@@ -3418,6 +3424,28 @@
       </div>
     </div>
 
-    <script src="app.js?v=20260523-logistics-create-order"></script>
+    <script>
+      (function () {
+        const defaultVersion = 'v20260603';
+        const setVersionText = (v) => {
+          const el = document.getElementById('app-version');
+          if (!el) return;
+          el.textContent = v;
+        };
+        const loadApp = (v) => {
+          const ver = String(v || defaultVersion || '').trim() || defaultVersion;
+          setVersionText(ver);
+          const s = document.createElement('script');
+          s.src = 'app.js?v=' + encodeURIComponent(ver) + '&_t=' + Date.now();
+          document.body.appendChild(s);
+        };
+
+        fetch('version.txt?_t=' + Date.now(), { cache: 'no-store' })
+          .then((r) => (r.ok ? r.text() : Promise.reject(new Error('bad_status'))))
+          .then((t) => String(t || '').trim())
+          .then((v) => (v ? loadApp(v) : loadApp(defaultVersion)))
+          .catch(() => loadApp(defaultVersion));
+      })();
+    </script>
   </body>
 </html>

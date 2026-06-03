@@ -12,3 +12,16 @@ backups/
 goeat餐饮系统/
 komeyacaiwu999000/
 .ghconfig/
+uploads/
+_backup_before_*/
+komeyacaiwu/
+docker-compose.local.yml
+server/nginx.local.conf
+server/nginx.staging.conf
+local-dev-server.js
+warehouse-production.html
+server/src/check_db.js
+server/src/migrate_daily_orders.js
+server/src/migrate_images.js
+.vercelignore
+vercel.json

@@ -412,6 +412,7 @@ const ledgerNotesModal = document.getElementById('ledger-notes-modal');
 const ledgerNotesContent = document.getElementById('ledger-notes-content');
 let ledgerPage = 1;
 const ledgerPageSize = 100;
+let ledgerViewRows = [];
 function updateLedgerHeaderCover() {}
 let ledgerHdrType = 'all';
 let ledgerHdrCat = '';
@@ -538,6 +539,50 @@ window.downloadLedgerTemplate = function() {
   XLSX.writeFile(wb, "批量导入模板.xlsx");
 };
 
+window.exportLedgerExcel = function() {
+  if (typeof XLSX === 'undefined') {
+    alert('Excel 库未加载，请刷新页面后重试');
+    return;
+  }
+  const list = Array.isArray(ledgerViewRows) ? ledgerViewRows : [];
+  if (!list.length) {
+    alert('当前页面没有记录可导出');
+    return;
+  }
+  const ws_data = [
+    ["类型", "子类目", "单据/凭证号", "往来单位", "金额", "支付方式", "文件", "录入人员", "确认人员", "备注", "日期"]
+  ];
+  list.forEach(r => {
+    const amt = (r.type === '开支' || r.type === '支出') ? (-Number(r.amount || 0)) : Number(r.amount || 0);
+    const confirmedBy = r.confirmedBy || (r.confirmed === false ? '未确认' : (r.createdBy || ''));
+    const fileVal = r.fileUrl || r.file || '';
+    const dateVal = (r.dateTime || r.date || '');
+    ws_data.push([
+      r.type || '',
+      r.category || '',
+      r.doc || '',
+      r.client || '',
+      Number.isFinite(amt) ? amt.toFixed(2) : '0.00',
+      r.method || '',
+      fileVal,
+      r.createdBy || '',
+      confirmedBy || '',
+      r.notes || '',
+      dateVal
+    ]);
+  });
+  const ws = XLSX.utils.aoa_to_sheet(ws_data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "收支记账");
+  const now = new Date();
+  const name = `收支记账_${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}.xlsx`;
+  XLSX.writeFile(wb, name);
+};
+
+document.getElementById('ledger-export')?.addEventListener('click', () => {
+  try { window.exportLedgerExcel(); } catch {}
+});
+
 ldType?.addEventListener('click', (e) => { e.stopPropagation(); openLedgerTypeFilter(); });
 ldCat?.addEventListener('click', (e) => { e.stopPropagation(); openLedgerCatFilter(); });
 ldOwner?.addEventListener('click', (e) => { e.stopPropagation(); openLedgerOwnerFilter(); });
@@ -557,6 +602,18 @@ function loadJSON(key, def) {
 }
 function saveJSON(key, val) {
   localStorage.setItem(key, JSON.stringify(val));
+}
+const LEDGER_CACHE_MAX = 2000;
+function ledgerCachePayload() {
+  return records.slice(0, LEDGER_CACHE_MAX).map(r => {
+    const { fileUrl, ...rest } = r;
+    return rest;
+  });
+}
+function persistLedgerCacheAsync() {
+  const run = () => { try { saveJSON('records', ledgerCachePayload()); } catch {} };
+  if (typeof requestIdleCallback === 'function') requestIdleCallback(run, { timeout: 1500 });
+  else setTimeout(run, 0);
 }
 function initPersist() {
   const recs = loadJSON('records', []);
@@ -584,6 +641,12 @@ function initPersist() {
   const contactsSaved = loadJSON('contactsData', null);
   if (contactsSaved && typeof contactsSaved === 'object') {
     ['customers','merchants','others'].forEach(k => { if (Array.isArray(contactsSaved[k])) contactsData[k] = contactsSaved[k]; });
+    const hasPh = !!(
+      contactsData.customers?.some(x => x.name === '客户A') ||
+      contactsData.merchants?.some(x => x.name === '商家A') ||
+      contactsData.others?.some(x => x.name === '单位A')
+    );
+    if (!hasPh && (contactsData.customers?.length || contactsData.merchants?.length || contactsData.others?.length)) contactsLoaded = true;
   }
   const accs = loadJSON('accountsData', null);
   if (Array.isArray(accs)) { accountsData.splice(0, accountsData.length, ...accs); }
@@ -1138,7 +1201,11 @@ async function saveLedgerAttachmentForRow(rec, fileObj) {
       throw new Error('save_failed');
     }
   }
-  await loadLedgerFromServer(true);
+  rec.file = fileUrl;
+  rec.fileUrl = (fileUrl && fileUrl.startsWith('/')) ? fileUrl : '';
+  rec.fileName = fileUrl ? fileUrl.split('/').pop() : '';
+  persistLedgerCacheAsync();
+  applyFilters(true);
 }
 function render(data) {
   rows.innerHTML = '';
@@ -1330,7 +1397,10 @@ function render(data) {
         try {
           await apiFetchJSON('/api/ledger/' + String(r.id) + '/confirm', { method:'PUT' });
           clearLedgerEdit();
-          loadLedgerFromServer(true);
+          r.confirmed = true;
+          r.confirmedBy = getAuthUser()?.name || r.confirmedBy || r.createdBy || '';
+          persistLedgerCacheAsync();
+          applyFilters(true);
           loadPayablesFromServer();
           apiAccountsList().then(() => { refreshAccountOptions(); renderAccounts(); });
         } catch {}
@@ -1340,7 +1410,10 @@ function render(data) {
         openConfirm('确定要彻底删除这条记录吗？删除后相关的统计将被抹除且不可恢复。', async () => {
           try {
             await apiFetchJSON('/api/ledger/' + String(r.id), { method: 'DELETE' });
-            loadLedgerFromServer(true);
+            const idx = records.findIndex(x => String(x.id) === String(r.id));
+            if (idx >= 0) records.splice(idx, 1);
+            persistLedgerCacheAsync();
+            applyFilters(true);
             if (document.getElementById('page-home')?.style.display === 'block') {
               renderHomeChart(homePeriodSel?.value || 'month');
               renderSalesChart(salesPeriodSel?.value || 'month');
@@ -1403,6 +1476,7 @@ function applyFilters(preserveScroll = false) {
   if (ledgerPage > totalPages) ledgerPage = totalPages;
   const startIdx = (ledgerPage - 1) * ledgerPageSize;
   const out = outAll.slice(startIdx, startIdx + ledgerPageSize);
+  ledgerViewRows = out;
   
   const currentScroll = ledgerTableWrap ? ledgerTableWrap.scrollTop : 0;
   
@@ -1469,8 +1543,8 @@ document.getElementById('system-clear-ledger')?.addEventListener('click', async 
   try {
     await apiFetchJSON('/api/ledger', { method:'DELETE' });
     records.splice(0, records.length);
-    saveJSON('records', records);
-    loadLedgerFromServer();
+    persistLedgerCacheAsync();
+    applyFilters();
     loadPayablesFromServer();
     apiAccountsList().then(() => { refreshAccountOptions(); renderAccounts(); });
     renderContacts();
@@ -1545,16 +1619,54 @@ document.getElementById('entry-form').addEventListener('submit', async e => {
         headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ type, category, doc, client: clientVal, amount, method, file: finalFile, notes: entryNotes.value.trim(), date: finalDate, dateTime: finalDateTime, createdBy: ledgerEditingCreatedBy })
       });
+      const idx = records.findIndex(x => String(x.id) === String(ledgerEditingId));
+      if (idx >= 0) {
+        const r = records[idx];
+        r.type = type || '';
+        r.category = category || '';
+        r.doc = doc || '';
+        r.client = clientVal || '';
+        r.amount = Number(amount || 0);
+        r.method = method || '';
+        r.file = finalFile || '';
+        r.fileUrl = (finalFile && finalFile.startsWith('/')) ? finalFile : '';
+        r.fileName = finalFile ? finalFile.split('/').pop() : '';
+        r.notes = entryNotes.value.trim();
+        r.date = finalDate || '';
+        r.dateTime = finalDateTime || '';
+      }
       clearLedgerEdit();
     } else {
-      await apiFetchJSON('/api/ledger', {
+      const createdBy = (getAuthUser()?.name || '');
+      const resp = await apiFetchJSON('/api/ledger', {
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ type, category, doc, client: clientVal, amount, method, file: fileUrl, notes: entryNotes.value.trim(), date, dateTime, createdBy: (getAuthUser()?.name || ''), confirmed:false })
+        body: JSON.stringify({ type, category, doc, client: clientVal, amount, method, file: fileUrl, notes: entryNotes.value.trim(), date, dateTime, createdBy, confirmed:false })
+      });
+      records.unshift({
+        id: resp?.id,
+        type: type || '',
+        category: category || '',
+        doc: doc || '',
+        client: clientVal || '',
+        amount: Number(amount || 0),
+        method: method || '',
+        file: fileUrl || '',
+        fileUrl: (fileUrl && fileUrl.startsWith('/')) ? fileUrl : '',
+        fileName: fileUrl ? fileUrl.split('/').pop() : '',
+        notes: entryNotes.value.trim(),
+        date: date || '',
+        dateTime: dateTime || '',
+        createdAt: Date.now(),
+        createdBy,
+        confirmedBy: '',
+        confirmed: false,
+        entry: '手动'
       });
     }
   } catch {}
-  loadLedgerFromServer(true);
+  persistLedgerCacheAsync();
+  applyFilters(true);
   document.getElementById('entry-doc').value = '';
   entryClient.value = '';
   entryAmount.value = '';
@@ -1564,10 +1676,6 @@ document.getElementById('entry-form').addEventListener('submit', async e => {
   [document.getElementById('entry-doc'), entryClient, entryAmount, entryMethod].forEach(el => el?.classList.remove('invalid'));
   // ledgerPage = 1; // Removed to preserve current page after edit/save
   // applyFilters(); // Removed because loadLedgerFromServer(true) already calls applyFilters(true)
-  saveJSON('records', records.map(r => {
-    const { fileUrl, ...rest } = r;
-    return rest;
-  }));
   saveJSON('accountsData', accountsData);
   if (document.getElementById('page-home')?.style.display === 'block') {
     renderHomeChart(homePeriodSel?.value || 'month');
@@ -4575,7 +4683,7 @@ async function loadLedgerFromServer(preserveScroll = false) {
           entry: '手动'
         };
       }));
-      saveJSON('records', records);
+      persistLedgerCacheAsync();
       applyFilters(preserveScroll);
       const hm = document.getElementById('page-home');
       if (hm && hm.style.display === 'block') {
@@ -5051,6 +5159,7 @@ async function renderSalesChart(mode='month') {
 // Sales Order UI Logic
 const soCustomer = document.getElementById('so-customer');
 const soCustomerRemark = document.getElementById('so-customer-remark');
+const soArrears = document.getElementById('so-arrears');
 const soCustomerDD = document.getElementById('so-customer-dd');
 const soCustomerList = document.getElementById('so-customer-list');
 let currentSoCustomer = null;
@@ -5058,6 +5167,8 @@ const soCustomerSearch = document.getElementById('so-customer-search');
 const soDate = document.getElementById('so-date');
 const soTrust = document.getElementById('so-trust');
 const soInvoiceNo = document.getElementById('so-invoice-no');
+const soDocDd = document.getElementById('so-doc-dd');
+const soDocList = document.getElementById('so-doc-list');
 const soNotes = document.getElementById('so-notes');
 const soAddItem = document.getElementById('so-add-item');
 const soItems = document.getElementById('so-items');
@@ -5067,18 +5178,118 @@ const invRows = document.getElementById('inv-rows');
 const invSearch = document.getElementById('inv-search');
 const invRefresh = document.getElementById('inv-refresh');
 const invPager = document.getElementById('inv-pager');
+let invDocMode = 'invoice';
+
+function getInvDocMeta() {
+  if (invDocMode === 'albaran') return { cn: 'Albaran', docTitle: 'ALBARAN', dateLabel: 'Fecha del albaran:' };
+  return { cn: '发票', docTitle: 'FACTURA', dateLabel: 'Fecha de la factura:' };
+}
+
+function setInvDocMode(mode) {
+  invDocMode = mode === 'albaran' ? 'albaran' : 'invoice';
+  const meta = getInvDocMeta();
+  const title = document.getElementById('inv-page-title');
+  if (title) title.textContent = `${meta.cn}列表`;
+  if (invSearch) invSearch.placeholder = `搜索${meta.cn}号/客户/公司名称/${meta.cn}金额...`;
+  const thNo = document.getElementById('inv-th-no');
+  if (thNo) thNo.textContent = `${meta.cn}号`;
+  const editTitle = document.getElementById('edit-modal-title');
+  if (editTitle) editTitle.textContent = `修改${meta.cn}`;
+  const prevTitle = document.getElementById('inv-preview-title');
+  if (prevTitle) prevTitle.textContent = `${meta.cn}预览`;
+  const prevDocTitle = document.getElementById('prev-doc-title');
+  if (prevDocTitle) prevDocTitle.textContent = meta.docTitle;
+  const prevDateLabel = document.getElementById('prev-date-label');
+  if (prevDateLabel) prevDateLabel.textContent = meta.dateLabel;
+  const prevThArticle = document.getElementById('prev-th-article');
+  if (prevThArticle) prevThArticle.textContent = invDocMode === 'albaran' ? 'cod. Artículo' : 'Artículo';
+}
 
 if (soDate && !soDate.value) soDate.valueAsDate = new Date();
 
-// Fetch next invoice number
+let soDocMode = 'albaran';
+
+function getSoDocMeta() {
+  if (soDocMode === 'albaran') return { api: '/api/albarans', nextApi: '/api/albarans/next-no' };
+  return { api: '/api/invoices', nextApi: '/api/invoices/next-no' };
+}
+
+function renderSoDocDropdown() {
+  if (!soDocList) return;
+  const modes = [
+    { mode: 'albaran', label: 'Albaran' },
+    { mode: 'invoice', label: 'Factura' }
+  ];
+  soDocList.innerHTML = '';
+  modes.forEach(x => {
+    const div = document.createElement('div');
+    div.className = 'dd-item';
+    div.textContent = x.label;
+    if (x.mode === soDocMode) div.style.color = '#60a5fa';
+    div.addEventListener('click', async () => {
+      setSoDocMode(x.mode);
+      if (soDocDd) soDocDd.style.display = 'none';
+      await loadNextInvoiceNo();
+    });
+    soDocList.appendChild(div);
+  });
+}
+
+function setSoDocMode(mode) {
+  soDocMode = mode === 'invoice' ? 'invoice' : 'albaran';
+  if (soInvoiceNo) {
+    soInvoiceNo.dataset.docMode = soDocMode;
+    soInvoiceNo.style.color = soDocMode === 'albaran' ? '#e2e8f0' : 'var(--blue)';
+  }
+  renderSoDocDropdown();
+  applySoDocTaxMode();
+}
+
+function applySoDocTaxMode() {
+  if (!soItems) return;
+  Array.from(soItems.children).forEach(tr => {
+    const current = String(tr.dataset.taxRate || '').trim();
+    if (soDocMode === 'albaran') {
+      if (tr.dataset.origTaxRate === undefined) tr.dataset.origTaxRate = current;
+      tr.dataset.taxRate = '0';
+      const ivaEl = tr.querySelector('.iva-amt');
+      if (ivaEl) ivaEl.textContent = '0';
+    } else {
+      if (tr.dataset.origTaxRate !== undefined) {
+        const restore = String(tr.dataset.origTaxRate || '').trim();
+        if (restore !== '') tr.dataset.taxRate = restore;
+        delete tr.dataset.origTaxRate;
+      }
+    }
+  });
+  updateSoTotal();
+}
+
+if (soInvoiceNo) {
+  soInvoiceNo.addEventListener('click', (e) => {
+    if (!soDocDd) return;
+    e.preventDefault();
+    e.stopPropagation();
+    soDocDd.style.display = soDocDd.style.display === 'block' ? 'none' : 'block';
+  });
+  document.addEventListener('click', (e) => {
+    if (!soDocDd) return;
+    if (soDocDd.contains(e.target) || soInvoiceNo.contains(e.target)) return;
+    soDocDd.style.display = 'none';
+  });
+}
+
+// Fetch next invoice/albaran number
 async function loadNextInvoiceNo() {
   if (!soInvoiceNo) return;
+  const meta = getSoDocMeta();
   try {
-    const res = await fetchWithAuth('/api/invoices/next-no');
+    const res = await fetchWithAuth(meta.nextApi);
     if (res.ok) {
       const data = await res.json();
-      soInvoiceNo.textContent = data.nextNo;
-      soInvoiceNo.dataset.nextNo = data.nextNo;
+      const nextNo = String(data.nextNo || '').trim();
+      soInvoiceNo.textContent = (nextNo ? nextNo : '--') + ' ▾';
+      soInvoiceNo.dataset.nextNo = nextNo;
     }
   } catch {}
 }
@@ -5143,6 +5354,10 @@ function renderSoCustomerDropdown() {
         }
       }
       soCustomerDD.style.display = 'none';
+      setSoCustomerRequiredState(false);
+      ensureSoTailRow(true);
+      updateSoCustomerArrears(item.name);
+      try { loadPayablesFromServer().then(() => updateSoCustomerArrears(item.name)); } catch {}
     });
     soCustomerList.appendChild(div);
   });
@@ -5179,6 +5394,19 @@ if (soCustomer) {
     openSoCustomerDropdown();
     renderSoCustomerDropdown();
     if (soCustomerRemark) soCustomerRemark.textContent = '';
+    setSoCustomerRequiredState(false);
+    updateSoCustomerArrears(soCustomer.value);
+  });
+  soCustomer.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    if (!String(soCustomer.value || '').trim()) return;
+    e.preventDefault();
+    e.stopPropagation();
+    setSoCustomerRequiredState(false);
+    if (soCustomerDD) soCustomerDD.style.display = 'none';
+    ensureSoTailRow(true);
+    updateSoCustomerArrears(soCustomer.value);
+    try { loadPayablesFromServer().then(() => updateSoCustomerArrears(soCustomer.value)); } catch {}
   });
   document.addEventListener('click', e => {
     if (!soCustomer.contains(e.target) && !soCustomerDD.contains(e.target)) {
@@ -5204,10 +5432,11 @@ function updateSoTotal() {
     let taxRate = parseFloat(tr.dataset.taxRate);
     if (isNaN(taxRate)) taxRate = 0.10;
     if (taxRate >= 1) taxRate = taxRate / 100;
+    if (soDocMode === 'albaran') taxRate = 0;
     
     const taxAmt = amt * taxRate;
     
-    tr.querySelector('.iva-amt').textContent = taxAmt.toFixed(2);
+    tr.querySelector('.iva-amt').textContent = (soDocMode === 'albaran' ? '0' : taxAmt.toFixed(2));
     tr.querySelector('.amt').textContent = amt.toFixed(2);
     
     subtotal += amt;
@@ -5504,68 +5733,273 @@ if (prodSelClose) {
 }
 if (prodSelSearch) prodSelSearch.addEventListener('input', () => loadProductSelector());
 
-function addSoItem(p) {
-  // Determine Price
-  let price = Number(p.price1 || 0);
-  if (!currentSoCustomer && soCustomer.value) {
-     // Try to find customer
-     const all = [
+async function lookupProductByCode(code) {
+  const q = String(code || '').trim();
+  if (!q) return null;
+  try {
+    const res = await fetchWithAuth(`/api/products?page=1&size=50&q=${encodeURIComponent(q)}`);
+    if (!res.ok) return null;
+    const data = await res.json().catch(() => ({}));
+    const list = Array.isArray(data.list) ? data.list : [];
+    const norm = (v) => String(v || '').trim();
+    return list.find(p => norm(p.sku) === q || norm(p.barcode) === q || String(p.id || '') === q) || null;
+  } catch {
+    return null;
+  }
+}
+
+function findSoRowByProduct(prod) {
+  const pid = String(prod?.id || '').trim();
+  const sku = String(prod?.sku || '').trim();
+  return Array.from(soItems?.children || []).find(tr => {
+    const trPid = String(tr.dataset.productId || '').trim();
+    const trSku = String(tr.dataset.sku || '').trim();
+    if (pid && trPid === pid) return true;
+    if (sku && trSku === sku) return true;
+    return false;
+  }) || null;
+}
+
+function ensureSoTailRow(focus = false) {
+  if (!soItems) return;
+  const rows = Array.from(soItems.children);
+  const last = rows[rows.length - 1] || null;
+  if (!last || String(last.dataset.productId || '').trim()) {
+    addSoEmptyRow(focus);
+    return;
+  }
+  if (focus) {
+    const input = last.querySelector('.code');
+    if (input) {
+      input.focus();
+      input.select();
+    }
+  }
+}
+
+function setSoCustomerRequiredState(focusIfEmpty = false) {
+  if (!soCustomer) return;
+  const ok = !!String(soCustomer.value || '').trim();
+  if (!ok) {
+    soCustomer.style.borderColor = '#ef4444';
+    if (focusIfEmpty) {
+      soCustomer.focus();
+      soCustomer.select();
+    }
+  } else {
+    soCustomer.style.borderColor = '';
+  }
+  updateSoCustomerArrears(ok ? soCustomer.value : '');
+  const last = Array.from(soItems?.children || []).slice(-1)[0] || null;
+  const lastCode = last?.querySelector?.('.code') || null;
+  if (lastCode) {
+    lastCode.disabled = !ok;
+    if (ok) lastCode.style.borderColor = '';
+  }
+}
+
+function updateSoCustomerArrears(name) {
+  if (!soArrears) return;
+  const n = String(name || '').trim();
+  if (!n) {
+    soArrears.textContent = '';
+    return;
+  }
+  const amtStr = typeof partnerArrears === 'function' ? partnerArrears(n, '客户') : '0';
+  const amt = parseFloat(amtStr) || 0;
+  soArrears.textContent = amt > 0 ? `欠款 ${amt.toFixed(2)}` : '';
+}
+
+function addSoEmptyRow(focus = false) {
+  if (!soItems) return;
+  const tr = document.createElement('tr');
+  tr.style.borderBottom = '1px solid #1e293b';
+  tr.dataset.taxRate = soDocMode === 'albaran' ? '0' : '0.10';
+  tr.dataset.productId = '';
+  tr.dataset.sku = '';
+  tr.dataset.name = '';
+  tr.dataset.nameCn = '';
+  tr.innerHTML = `
+    <td style="padding:10px 16px">
+      <input type="text" class="code light-input" style="width:100%; text-align:center; background:#0f172a; border:1px solid #334155" value="" autocomplete="off">
+    </td>
+    <td style="padding:10px 16px">
+      <div class="cn-wrap" style="display:flex; flex-direction:column; gap:4px">
+        <div class="cn-text" style="color:#94a3b8"></div>
+        <div class="name-text" style="color:#e2e8f0; font-weight:500"></div>
+      </div>
+    </td>
+    <td style="padding:10px 16px"><input type="text" class="desc light-input" style="width:100%; background:transparent; border:none; color:#94a3b8" value="" placeholder="规格" disabled></td>
+    <td style="padding:10px 16px"><input type="number" class="qty light-input" style="width:100%; text-align:center; background:#0f172a; border:1px solid #334155" value="1" min="1" disabled></td>
+    <td style="padding:10px 16px"><input type="number" class="price light-input" style="width:100%; text-align:center; background:#0f172a; border:1px solid #334155" value="0.00" min="0" step="0.01" disabled></td>
+    <td class="iva-amt" style="padding:10px 16px; text-align:right; font-family:monospace; color:#94a3b8">0.00</td>
+    <td class="amt" style="padding:10px 16px; text-align:right; font-family:monospace; color:#e2e8f0">0.00</td>
+    <td style="padding:10px 16px; text-align:center"></td>
+  `;
+
+  const codeEl = tr.querySelector('.code');
+  if (codeEl) {
+    codeEl.addEventListener('focus', function() { this.select(); });
+    codeEl.addEventListener('keydown', async (e) => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (!soCustomer?.value?.trim()) {
+        setSoCustomerRequiredState(true);
+        return;
+      }
+      const code = String(codeEl.value || '').trim();
+      if (!code) return;
+      const prod = await lookupProductByCode(code);
+      if (!prod) {
+        codeEl.style.borderColor = '#ef4444';
+        setTimeout(() => { codeEl.style.borderColor = '#334155'; }, 600);
+        return;
+      }
+      fillSoRowWithProduct(tr, prod, code);
+      ensureSoTailRow(false);
+      const qEl = tr.querySelector('.qty');
+      if (qEl) {
+        qEl.focus();
+        qEl.select();
+      }
+    });
+  }
+
+  soItems.appendChild(tr);
+  updateSoTotal();
+  if (focus) {
+    codeEl?.focus();
+    codeEl?.select();
+  }
+  setSoCustomerRequiredState(false);
+}
+
+function fillSoRowWithProduct(tr, p, typedCode = '') {
+  if (!tr) return;
+
+  if (!currentSoCustomer && soCustomer?.value) {
+    const all = [
       ...(contactsData.customers||[]),
       ...(contactsData.merchants||[]),
       ...(contactsData.others||[])
     ];
-    currentSoCustomer = all.find(c => c.name === soCustomer.value);
-  }
-  
-  if (currentSoCustomer) {
-    const tier = currentSoCustomer.use_price || 'price1';
-    // If p has price2, price3 etc. 
-    // Assuming p structure has price1, price2, price3... based on product schema.
-    // If not, fallback to price1.
-    if (p[tier] !== undefined && p[tier] !== null && p[tier] !== '') {
-      price = Number(p[tier]);
-    }
+    currentSoCustomer = all.find(c => c.name === soCustomer.value) || null;
   }
 
-  // Determine Tax Rate
-  let taxRate = 0.10; // Default 10%
+  const price = getProductPriceByCustomer(p, currentSoCustomer);
+
+  let taxRate = 0.10;
   if (p.tax_rate !== undefined && p.tax_rate !== null && p.tax_rate !== '') {
     taxRate = Number(p.tax_rate);
-    // Fix: if taxRate is percentage integer (e.g. 10, 21), convert to decimal
     if (taxRate >= 1) taxRate = taxRate / 100;
   }
-  
-  // "If Is IVA (true), add tax. If No (false), do NOT add tax."
-  if (currentSoCustomer) {
-    // Check if is_iva is false explicitly
-    if (currentSoCustomer.is_iva === false) {
-      taxRate = 0;
-    }
+  if (currentSoCustomer && currentSoCustomer.is_iva === false) taxRate = 0;
+  if (soDocMode === 'albaran') {
+    tr.dataset.origTaxRate = String(taxRate);
+    taxRate = 0;
+  } else {
+    delete tr.dataset.origTaxRate;
   }
 
+  tr.dataset.taxRate = String(taxRate);
+  tr.dataset.productId = String(p.id || '');
+  tr.dataset.sku = String(p.sku || typedCode || '').trim();
+  tr.dataset.name = String(p.name || '').trim();
+  tr.dataset.nameCn = String(p.name_cn || '').trim();
+
+  const codeEl = tr.querySelector('.code');
+  if (codeEl) {
+    codeEl.value = String(p.sku || typedCode || '').trim();
+    codeEl.readOnly = true;
+  }
+
+  const cnEl = tr.querySelector('.cn-text');
+  const nameEl = tr.querySelector('.name-text');
+  if (cnEl) cnEl.textContent = String(p.name_cn || '').trim();
+  if (nameEl) nameEl.textContent = String(p.name || '').trim();
+
+  const descEl = tr.querySelector('.desc');
+  if (descEl) {
+    descEl.disabled = false;
+    descEl.value = String(p.spec || p.description || '').trim();
+    descEl.addEventListener('focus', function() { this.select(); });
+    descEl.addEventListener('input', updateSoTotal);
+  }
+
+  const qtyEl = tr.querySelector('.qty');
+  if (qtyEl) {
+    qtyEl.disabled = false;
+    qtyEl.value = '1';
+    qtyEl.addEventListener('focus', function() { this.select(); });
+    qtyEl.addEventListener('input', updateSoTotal);
+    qtyEl.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      e.stopPropagation();
+      const priceEl = tr.querySelector('.price');
+      if (priceEl) {
+        priceEl.focus();
+        priceEl.select();
+      }
+    });
+  }
+
+  const priceEl = tr.querySelector('.price');
+  if (priceEl) {
+    priceEl.disabled = false;
+    priceEl.value = Number(price || 0).toFixed(2);
+    priceEl.addEventListener('focus', function() { this.select(); });
+    priceEl.addEventListener('input', updateSoTotal);
+    priceEl.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      e.stopPropagation();
+      ensureSoTailRow(true);
+    });
+  }
+
+  const opTd = tr.lastElementChild;
+  if (opTd) {
+    opTd.innerHTML = `<button type="button" class="btn-red btn-icon" style="width:24px;height:24px;padding:0;font-size:12px">×</button>`;
+    const delBtn = opTd.querySelector('.btn-red');
+    if (delBtn) delBtn.addEventListener('click', () => {
+      tr.remove();
+      updateSoTotal();
+      ensureSoTailRow();
+    });
+  }
+
+  updateSoTotal();
+}
+
+function addSoItem(p) {
   const tr = document.createElement('tr');
   tr.style.borderBottom = '1px solid #1e293b';
-  tr.dataset.taxRate = taxRate; // Store tax rate
-  tr.dataset.productId = p.id || '';
-  tr.dataset.sku = p.sku || '';
-  
+  tr.dataset.taxRate = soDocMode === 'albaran' ? '0' : '0.10';
+  tr.dataset.productId = '';
+  tr.dataset.sku = '';
+  tr.dataset.name = '';
+  tr.dataset.nameCn = '';
   tr.innerHTML = `
-    <td style="padding:10px 16px"><input type="text" class="name light-input" style="width:100%; background:transparent; border:none; color:#e2e8f0" value="${p.name}"></td>
-    <td style="padding:10px 16px"><input type="text" class="name-cn light-input" style="width:100%; background:transparent; border:none; color:#94a3b8" value="${p.name_cn||''}" placeholder="中文名"></td>
-    <td style="padding:10px 16px"><input type="text" class="desc light-input" style="width:100%; background:transparent; border:none; color:#94a3b8" value="${p.spec || p.description || ''}" placeholder="规格"></td>
+    <td style="padding:10px 16px">
+      <input type="text" class="code light-input" style="width:100%; text-align:center; background:#0f172a; border:1px solid #334155" value="" autocomplete="off">
+    </td>
+    <td style="padding:10px 16px">
+      <div class="cn-wrap" style="display:flex; flex-direction:column; gap:4px">
+        <div class="cn-text" style="color:#94a3b8"></div>
+        <div class="name-text" style="color:#e2e8f0; font-weight:500"></div>
+      </div>
+    </td>
+    <td style="padding:10px 16px"><input type="text" class="desc light-input" style="width:100%; background:transparent; border:none; color:#94a3b8" value="" placeholder="规格"></td>
     <td style="padding:10px 16px"><input type="number" class="qty light-input" style="width:100%; text-align:center; background:#0f172a; border:1px solid #334155" value="1" min="1"></td>
-    <td style="padding:10px 16px"><input type="number" class="price light-input" style="width:100%; text-align:center; background:#0f172a; border:1px solid #334155" value="${price.toFixed(2)}" min="0" step="0.01"></td>
+    <td style="padding:10px 16px"><input type="number" class="price light-input" style="width:100%; text-align:center; background:#0f172a; border:1px solid #334155" value="0.00" min="0" step="0.01"></td>
     <td class="iva-amt" style="padding:10px 16px; text-align:right; font-family:monospace; color:#94a3b8">0.00</td>
-    <td class="amt" style="padding:10px 16px; text-align:right; font-family:monospace; color:#e2e8f0">${price.toFixed(2)}</td>
+    <td class="amt" style="padding:10px 16px; text-align:right; font-family:monospace; color:#e2e8f0">0.00</td>
     <td style="padding:10px 16px; text-align:center"><button type="button" class="btn-red btn-icon" style="width:24px;height:24px;padding:0;font-size:12px">×</button></td>
   `;
-  tr.querySelector('.btn-red').addEventListener('click', () => { tr.remove(); updateSoTotal(); });
-  tr.querySelectorAll('input').forEach(i => {
-    i.addEventListener('input', updateSoTotal);
-    i.addEventListener('focus', function() { this.select(); });
-  });
   soItems.appendChild(tr);
-  updateSoTotal();
+  fillSoRowWithProduct(tr, p, String(p?.sku || '').trim());
 }
 
 if (soSave) {
@@ -5574,18 +6008,20 @@ if (soSave) {
     if (!customer) { alert('请选择客户'); return; }
     const items = [];
     Array.from(soItems.children).forEach(tr => {
-      const name = (tr.querySelector('.name').value||'').trim();
-      const desc = (tr.querySelector('.desc').value||'').trim();
+      const name = String(tr.dataset.name || '').trim();
+      const name_cn = String(tr.dataset.nameCn || '').trim();
+      const desc = (tr.querySelector('.desc')?.value||'').trim();
       const qty = parseFloat(tr.querySelector('.qty').value)||0;
       const price = parseFloat(tr.querySelector('.price').value)||0;
       // Get tax_rate from dataset
       let taxRate = parseFloat(tr.dataset.taxRate);
       if (isNaN(taxRate)) taxRate = 0.10; // Fallback
       if (taxRate >= 1) taxRate = taxRate / 100; // Safety fix for integer percentages
+      if (soDocMode === 'albaran') taxRate = 0;
       
       const productId = tr.dataset.productId || '';
-      const sku = tr.dataset.sku || '';
-      if (name) items.push({ name, description: desc, qty, price, total: qty*price, tax_rate: taxRate, productId, sku });
+      const sku = tr.dataset.sku || (tr.querySelector('.code')?.value || '');
+      if (name) items.push({ name, name_cn, description: desc, qty, price, total: qty*price, tax_rate: taxRate, productId, sku });
     });
     if (items.length === 0) { alert('请至少添加一个商品'); return; }
     
@@ -5594,9 +6030,10 @@ if (soSave) {
     
     const sales = soSales ? soSales.value : '';
 
+    const meta = getSoDocMeta();
     if (editId) {
       // Update existing invoice
-      res = await fetchWithAuth(`/api/invoices/${editId}`, {
+      res = await fetchWithAuth(`${meta.api}/${editId}`, {
         method: 'PUT',
         body: JSON.stringify({
           customer,
@@ -5609,17 +6046,20 @@ if (soSave) {
       });
     } else {
       // Create new invoice
-      res = await fetchWithAuth('/api/invoices', {
+      const body = {
+        customer,
+        date: soDate.value,
+        items,
+        notes: soNotes.value,
+        sales,
+        trust_days: parseInt(soTrust.value||'30', 10)
+      };
+      if (soDocMode === 'albaran') body.albaran_no = soInvoiceNo.dataset.nextNo;
+      else body.invoice_no = soInvoiceNo.dataset.nextNo;
+
+      res = await fetchWithAuth(meta.api, {
         method: 'POST',
-        body: JSON.stringify({
-          customer,
-          date: soDate.value,
-          items,
-          notes: soNotes.value,
-          sales,
-          trust_days: parseInt(soTrust.value||'30', 10),
-          invoice_no: soInvoiceNo.dataset.nextNo
-        })
+        body: JSON.stringify(body)
       });
     }
 
@@ -5634,9 +6074,11 @@ if (soSave) {
       soSales.disabled = false;
     }
     updateSoTotal();
+      if (typeof ensureSoTailRow === 'function') ensureSoTailRow(false);
+      if (typeof setSoCustomerRequiredState === 'function') setSoCustomerRequiredState(true);
       delete soInvoiceNo.dataset.id; // Clear edit mode
       loadNextInvoiceNo();
-      location.hash = '#sales-invoice';
+      location.hash = (soDocMode === 'albaran') ? '#sales-albaran' : '#sales-invoice';
     } else {
       const err = await res.json().catch(()=>({}));
       if (err.error === 'cannot_edit_paid_invoice') {
@@ -5727,7 +6169,8 @@ if (soSave) {
     if (!invRows) return;
     const q = (invSearch?.value||'').trim();
     try { await ensureRealContactsLoaded(); } catch {}
-    const res = await fetchWithAuth(`/api/invoices?page=${invPage}&size=${invPageSize}&q=${encodeURIComponent(q)}`);
+    const base = invDocMode === 'albaran' ? '/api/albarans' : '/api/invoices';
+    const res = await fetchWithAuth(`${base}?page=${invPage}&size=${invPageSize}&q=${encodeURIComponent(q)}`);
     if (res.ok) {
       const data = await res.json();
       const list = data.list || [];
@@ -5737,7 +6180,8 @@ if (soSave) {
       renderInvPager();
       
       if (list.length === 0) {
-        invRows.innerHTML = '<tr class="empty"><td colspan="8">暂无发票数据</td></tr>';
+        const meta = getInvDocMeta();
+        invRows.innerHTML = `<tr class="empty"><td colspan="8">暂无${meta.cn}数据</td></tr>`;
         return;
       }
       list.forEach((x, i) => {
@@ -5788,7 +6232,7 @@ if (soSave) {
 
         tr.innerHTML = `
           <td>${seq}</td>
-          <td>${x.invoice_no||''}</td>
+          <td>${invDocMode === 'albaran' ? (x.albaran_no||'') : (x.invoice_no||'')}</td>
           <td>${displayCustomer}</td>
           <td>${companyName}</td>
           <td>${displayDate}</td>
@@ -6023,16 +6467,18 @@ function mergeInvoicePreviewItems(items) {
   const merged = [];
   const map = new Map();
   (Array.isArray(items) ? items : []).forEach(item => {
+    const sku = String(item?.sku || item?.productId || '').trim();
     const name = normalizeInvoicePreviewText(item?.name);
     const { baseDesc, lote } = splitInvoiceDescriptionAndLote(item?.description);
     let taxRate = Number(item?.tax_rate);
     if (isNaN(taxRate) || item?.tax_rate === undefined || item?.tax_rate === null || item?.tax_rate === '') taxRate = 0.10;
     if (taxRate >= 1) taxRate = taxRate / 100;
     const price = Number(item?.price || 0);
-    const key = [name, baseDesc, lote, price.toFixed(6), taxRate.toFixed(6)].join('||');
+    const key = [sku || '-', name, baseDesc, lote, price.toFixed(6), taxRate.toFixed(6)].join('||');
     if (!map.has(key)) {
       const mergedItem = {
         ...item,
+        sku,
         name,
         description: [baseDesc, lote ? `Lote:${lote}` : ''].filter(Boolean).join(' '),
         qty: Number(item?.qty || 0),
@@ -6092,8 +6538,9 @@ window.previewInvoice = async function(id) {
     const customerCity = inv.customer_city || cust?.city || cust?.ship_city || '';
     const customerCountry = inv.customer_country || cust?.country || cust?.ship_country || '';
     if (cust) {
+      const headerLabel = invDocMode === 'albaran' ? '' : 'Facturado a';
       customerInfoHtml = `
-        <div class="customer-label">Facturado a</div>
+        ${headerLabel ? `<div class="customer-label">${headerLabel}</div>` : ''}
         <div style="font-weight:700">${companyName}</div>
         ${customerCode ? `<div>${customerCode}</div>` : ''}
         ${customerAddress ? `<div>${customerAddress}</div>` : ''}
@@ -6102,8 +6549,9 @@ window.previewInvoice = async function(id) {
         ${customerCountry ? `<div>${customerCountry}</div>` : ''}
       `;
     } else if (companyName) {
+      const headerLabel = invDocMode === 'albaran' ? '' : 'Facturado a';
       customerInfoHtml = `
-        <div class="customer-label">Facturado a</div>
+        ${headerLabel ? `<div class="customer-label">${headerLabel}</div>` : ''}
         <div style="font-weight:700">${companyName}</div>
         ${customerCode ? `<div>${customerCode}</div>` : ''}
         ${customerAddress ? `<div>${customerAddress}</div>` : ''}
@@ -6112,21 +6560,23 @@ window.previewInvoice = async function(id) {
         ${customerCountry ? `<div>${customerCountry}</div>` : ''}
       `;
     } else {
+      const headerLabel = invDocMode === 'albaran' ? '' : 'Facturado a';
        customerInfoHtml = `
-        <div class="customer-label">Facturado a</div>
+        ${headerLabel ? `<div class="customer-label">${headerLabel}</div>` : ''}
         <div style="font-weight:700">${inv.customer || ''}</div>
       `;
     }
   } catch {
+    const headerLabel = invDocMode === 'albaran' ? '' : 'Facturado a';
     customerInfoHtml = `
-      <div class="customer-label">Facturado a</div>
+      ${headerLabel ? `<div class="customer-label">${headerLabel}</div>` : ''}
       <div style="font-weight:700">${inv.customer || ''}</div>
     `;
   }
   const custEl = document.getElementById('prev-customer-info');
   if (custEl) custEl.innerHTML = customerInfoHtml;
 
-  document.getElementById('prev-no').textContent = inv.invoice_no || '';
+  document.getElementById('prev-no').textContent = invDocMode === 'albaran' ? (inv.albaran_no || '') : (inv.invoice_no || '');
   
   // Update status based on payment
   const total = Number(inv.total_amount||0);
@@ -6182,6 +6632,7 @@ window.previewInvoice = async function(id) {
     let taxRate = Number(item.tax_rate);
     if (isNaN(taxRate) || item.tax_rate === undefined || item.tax_rate === null || item.tax_rate === '') taxRate = 0.10;
     if (taxRate >= 1) taxRate = taxRate / 100;
+    if (invDocMode === 'albaran') taxRate = 0;
     
     // If taxRate is 0, we don't show tax for this line? 
     // "Impuesto (税收) 没有税收的客户 这里不显示" -> If customer has no tax, all items 0 tax.
@@ -6193,7 +6644,7 @@ window.previewInvoice = async function(id) {
     const taxAmt = rowVal * taxRate;
     
     // Accumulate tax details
-    if (taxRate > 0) {
+    if (taxRate > 0 && invDocMode !== 'albaran') {
       const key = (taxRate * 100).toFixed(2); // "21.00", "10.00"
       if (!taxDetails[key]) taxDetails[key] = 0;
       taxDetails[key] += taxAmt;
@@ -6201,17 +6652,25 @@ window.previewInvoice = async function(id) {
 
     const tr = document.createElement('tr');
     let taxDisplay = '';
-    if (taxRate > 0) {
+    if (invDocMode === 'albaran') {
+      taxDisplay = '0';
+    } else if (taxRate > 0) {
       taxDisplay = `IVA ${(taxRate*100).toFixed(2)}%`;
     }
+    const rawSku = String(item.sku || item.productId || '').trim();
+    const codHtml = invDocMode === 'albaran' ? `<div class="item-desc">cod. ${rawSku}</div>` : '';
+    const descHtml = invDocMode === 'albaran' ? `<div class="item-desc">${String(item.name_cn || '').trim()}</div>` : `<div class="item-desc">${item.description||''}</div>`;
+    const { baseDesc } = splitInvoiceDescriptionAndLote(item?.description);
+    const specTiny = invDocMode === 'albaran' && baseDesc ? `&nbsp;&nbsp;<span style="font-size:10px;color:#666">${baseDesc}</span>` : '';
     
     tr.innerHTML = `
       <td class="item-idx">${idx + 1}</td>
       <td>
+        ${codHtml}
         <div class="item-name">${item.name||''}</div>
-        <div class="item-desc">${item.description||''}</div>
+        ${descHtml}
       </td>
-      <td style="text-align:right">${qty}</td>
+      <td style="text-align:right">${qty}${specTiny}</td>
       <td style="text-align:right">${price.toFixed(2)}</td>
       <td style="text-align:right">${taxDisplay}</td>
       <td style="text-align:right">${rowVal.toFixed(2)}</td>
@@ -6364,7 +6823,7 @@ window.editInvoice = function(id) {
   
   // Fill basic info
   document.getElementById('edit-id').value = inv.id;
-  document.getElementById('edit-invoice-no').textContent = inv.invoice_no;
+  document.getElementById('edit-invoice-no').textContent = invDocMode === 'albaran' ? (inv.albaran_no || '') : (inv.invoice_no || '');
   editCustomer.value = inv.customer || '';
   document.getElementById('edit-date').value = inv.date || '';
   document.getElementById('edit-notes').value = inv.notes || '';
@@ -6546,7 +7005,8 @@ if (editSave) {
     
     if (items.length === 0) { alert('请至少添加一个商品'); return; }
     
-    const res = await fetchWithAuth(`/api/invoices/${id}`, {
+    const base = invDocMode === 'albaran' ? '/api/albarans' : '/api/invoices';
+    const res = await fetchWithAuth(`${base}/${id}`, {
       method: 'PUT',
       body: JSON.stringify({
         customer,
@@ -7971,7 +8431,7 @@ if (shipPrevPrint) {
     let invNo = '';
     if (currentShippingInvId) {
       const inv = currentInvoices.find(x => String(x.id) === String(currentShippingInvId));
-      if (inv) invNo = inv.invoice_no;
+      if (inv) invNo = invDocMode === 'albaran' ? (inv.albaran_no || '') : (inv.invoice_no || '');
     }
     invNo = invNo || 'ShippingLabel';
     invNo = invNo.trim().replace(/\s+/g, '');
@@ -7982,7 +8442,8 @@ if (shipPrevPrint) {
         const inv = currentInvoices.find(x => String(x.id) === String(currentShippingInvId));
         if (inv && !inv.shipping_printed) {
           try {
-            await apiFetchJSON(`/api/invoices/${currentShippingInvId}/print-shipping`, { method:'PUT' });
+            const base = invDocMode === 'albaran' ? '/api/albarans' : '/api/invoices';
+            await apiFetchJSON(`${base}/${currentShippingInvId}/print-shipping`, { method:'PUT' });
             inv.shipping_printed = true;
             loadInvoices();
           } catch {}
@@ -8166,10 +8627,9 @@ async function handleRoute() {
         setLabel(document.getElementById('ld-confirm-label'), '操作', false);
       }
     } catch {}
-    loadLedgerFromServer().then(() => {
-      if (typeof applyFilters === 'function') applyFilters();
-    });
-    loadAllContacts();
+    try { if (records.length && typeof applyFilters === 'function') applyFilters(); } catch {}
+    loadLedgerFromServer(true);
+    setTimeout(() => { try { if (typeof ensureRealContactsLoaded === 'function') ensureRealContactsLoaded(); } catch {} }, 0);
   }
   else if (hash === 'payables') {
     if (!ensureView('payables')) return;
@@ -8206,11 +8666,14 @@ async function handleRoute() {
         await loadInvoiceForEdit(pendingEditInvoiceId);
         pendingEditInvoiceId = null;
       } else {
+        if (typeof setSoDocMode === 'function') setSoDocMode('albaran');
         if (typeof soCustomer !== 'undefined') soCustomer.value = '';
         if (typeof soUsePrice !== 'undefined') soUsePrice.value = '';
         if (typeof soNotes !== 'undefined') soNotes.value = '';
         if (typeof soItems !== 'undefined') soItems.innerHTML = '';
         if (typeof updateSoTotal === 'function') updateSoTotal();
+        if (typeof ensureSoTailRow === 'function') ensureSoTailRow(false);
+        if (typeof setSoCustomerRequiredState === 'function') setSoCustomerRequiredState(true);
         if (typeof soInvoiceNo !== 'undefined') delete soInvoiceNo.dataset.id;
         if (typeof loadNextInvoiceNo === 'function') await loadNextInvoiceNo();
       }
@@ -8218,6 +8681,16 @@ async function handleRoute() {
   }
   else if (hash === 'sales-invoice') {
     if (!ensureView('sales_invoice')) return;
+    setInvDocMode('invoice');
+    document.getElementById('page-sales-invoice').style.display = 'block';
+    if (typeof invPage !== 'undefined') invPage = 1;
+    loadAllContacts().then(() => {
+      loadInvoices();
+    });
+  }
+  else if (hash === 'sales-albaran') {
+    if (!ensureView('sales_invoice')) return;
+    setInvDocMode('albaran');
     document.getElementById('page-sales-invoice').style.display = 'block';
     if (typeof invPage !== 'undefined') invPage = 1;
     loadAllContacts().then(() => {

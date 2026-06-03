@@ -182,6 +182,19 @@ async function ensureSchema() {
       created_at bigint,
       created_by text
     );
+    create table if not exists albarans (
+      id serial primary key,
+      albaran_no text not null unique,
+      customer text,
+      date text,
+      items jsonb default '[]'::jsonb,
+      total_amount numeric default 0,
+      notes text,
+      sales text,
+      created_at bigint,
+      created_by text,
+      shipping_printed boolean default false
+    );
     create table if not exists products (
       id serial primary key,
       sku text unique,
@@ -222,6 +235,16 @@ async function ensureSchema() {
   await query('alter table invoices add column if not exists created_at bigint', []);
   await query('alter table invoices add column if not exists created_by text', []);
   await query('alter table invoices add column if not exists shipping_printed boolean default false', []);
+
+  await query('alter table albarans add column if not exists customer text', []);
+  await query('alter table albarans add column if not exists date text', []);
+  await query("alter table albarans add column if not exists items jsonb default '[]'::jsonb", []);
+  await query('alter table albarans add column if not exists total_amount numeric default 0', []);
+  await query('alter table albarans add column if not exists notes text', []);
+  await query('alter table albarans add column if not exists sales text', []);
+  await query('alter table albarans add column if not exists created_at bigint', []);
+  await query('alter table albarans add column if not exists created_by text', []);
+  await query('alter table albarans add column if not exists shipping_printed boolean default false', []);
 
   // Products migrations
   await query('alter table products add column if not exists sku text unique', []);
@@ -2249,6 +2272,189 @@ app.get('/api/sales-stats/products', authRequired, ensureAllow('sales_stats','vi
   });
 });
 
+app.get('/api/albarans', authRequired, ensureAllow('sales_invoice','view'), async (req, res) => {
+  const { q='', page='1', size='100' } = req.query;
+  const p = [];
+  let sql = `
+    select a.*,
+    0 as paid_amount,
+    (select c.company from contacts c where trim(c.name)=trim(a.customer) or trim(c.company)=trim(a.customer) order by case when trim(c.name)=trim(a.customer) then 0 else 1 end, c.id desc limit 1) as company_name,
+    (select c.code from contacts c where trim(c.name)=trim(a.customer) or trim(c.company)=trim(a.customer) order by case when trim(c.name)=trim(a.customer) then 0 else 1 end, c.id desc limit 1) as customer_code,
+    (select c.address from contacts c where trim(c.name)=trim(a.customer) or trim(c.company)=trim(a.customer) order by case when trim(c.name)=trim(a.customer) then 0 else 1 end, c.id desc limit 1) as customer_address,
+    (select c.zip from contacts c where trim(c.name)=trim(a.customer) or trim(c.company)=trim(a.customer) order by case when trim(c.name)=trim(a.customer) then 0 else 1 end, c.id desc limit 1) as customer_zip,
+    (select c.city from contacts c where trim(c.name)=trim(a.customer) or trim(c.company)=trim(a.customer) order by case when trim(c.name)=trim(a.customer) then 0 else 1 end, c.id desc limit 1) as customer_city,
+    (select c.country from contacts c where trim(c.name)=trim(a.customer) or trim(c.company)=trim(a.customer) order by case when trim(c.name)=trim(a.customer) then 0 else 1 end, c.id desc limit 1) as customer_country
+    from albarans a
+  `;
+  const conds = [];
+  if (q && q.trim()) {
+    conds.push(`(
+      a.albaran_no ilike $${p.length+1}
+      or a.customer ilike $${p.length+1}
+      or coalesce((
+        select c.company
+        from contacts c
+        where trim(c.name)=trim(a.customer) or trim(c.company)=trim(a.customer)
+        order by case when trim(c.name)=trim(a.customer) then 0 else 1 end, c.id desc
+        limit 1
+      ), '') ilike $${p.length+1}
+      or cast(coalesce(a.total_amount, 0) as text) ilike $${p.length+1}
+    )`);
+    p.push('%' + q.trim() + '%');
+  }
+  if (conds.length > 0) sql += ' where ' + conds.join(' and ');
+  
+  const pageNum = Math.max(1, parseInt(page, 10) || 1);
+  const pageSize = Math.max(1, Math.min(500, parseInt(size, 10) || 100));
+  
+  let countSql = 'select count(*)::int as c from albarans a';
+  if (conds.length > 0) countSql += ' where ' + conds.join(' and ');
+  const rCount = await query(countSql, p);
+  
+  sql += ' order by a.id desc';
+  sql += ` limit ${pageSize} offset ${(pageNum-1)*pageSize}`;
+  const r = await query(sql, p);
+  res.json({ list: r.rows, total: rCount.rows[0].c });
+});
+
+app.get('/api/albarans/next-no', authRequired, ensureAllow('sales_order','view'), async (req, res) => {
+  const year2 = String(new Date().getFullYear()).slice(-2);
+  const like = `Albaran-%-${year2}`;
+  const rMax = await query('select albaran_no from albarans where albaran_no like $1 order by albaran_no desc limit 1', [like]);
+  let nextSeq = 1;
+  if (rMax.rows[0]) {
+    const lastNo = rMax.rows[0].albaran_no;
+    const match = lastNo.match(/Albaran-(\d{6})-\d{2}/);
+    if (match) nextSeq = parseInt(match[1], 10) + 1;
+  }
+  const nextNo = `Albaran-${String(nextSeq).padStart(6, '0')}-${year2}`;
+  res.json({ nextNo });
+});
+
+app.post('/api/albarans', authRequired, ensureAllow('sales_order','edit'), async (req, res) => {
+  const x = req.body || {};
+  const now = Date.now();
+  let albaranNo = x.albaran_no;
+  if (!albaranNo) {
+    const year2 = String(new Date().getFullYear()).slice(-2);
+    const like = `Albaran-%-${year2}`;
+    const rMax = await query('select albaran_no from albarans where albaran_no like $1 order by albaran_no desc limit 1', [like]);
+    let nextSeq = 1;
+    if (rMax.rows[0]) {
+      const lastNo = rMax.rows[0].albaran_no;
+      const match = lastNo.match(/Albaran-(\d{6})-\d{2}/);
+      if (match) nextSeq = parseInt(match[1], 10) + 1;
+    }
+    albaranNo = `Albaran-${String(nextSeq).padStart(6, '0')}-${year2}`;
+  }
+
+  const items = await attachInvoiceItemSnapshots(Array.isArray(x.items) ? x.items : []);
+  const total = items.reduce((sum, item) => {
+    const qty = Number(item.qty||0);
+    const price = Number(item.price||0);
+    let taxRate = Number(item.tax_rate);
+    if (isNaN(taxRate) || item.tax_rate === undefined || item.tax_rate === null || item.tax_rate === '') {
+      taxRate = 0.10;
+    }
+    if (taxRate >= 1) taxRate = taxRate / 100;
+    const rowVal = qty * price;
+    const rowTax = rowVal * taxRate;
+    return sum + rowVal + rowTax;
+  }, 0);
+
+  const finalItems = await deductAndSplitStock(items);
+
+  const r = await query(`
+    insert into albarans(albaran_no, customer, date, items, total_amount, notes, sales, created_at, created_by)
+    values($1,$2,$3,$4,$5,$6,$7,$8,$9) returning id, albaran_no
+  `, [albaranNo, x.customer||'', x.date||'', JSON.stringify(finalItems), total, x.notes||'', x.sales||'', now, req.user.name||'']);
+
+  res.json({ id: r.rows[0].id, albaran_no: r.rows[0].albaran_no });
+});
+
+app.delete('/api/albarans/:id', authRequired, ensureAllow('sales_invoice','delete'), async (req, res) => {
+  const id = parseInt(req.params.id, 10) || 0;
+  const r = await query('select * from albarans where id=$1', [id]);
+  if (!r.rows[0]) return res.status(404).json({ error: 'not_found' });
+  const row = r.rows[0];
+  const items = Array.isArray(row.items) ? row.items : (typeof row.items === 'string' ? JSON.parse(row.items) : []);
+  for (const item of items) {
+    await restoreInventoryForInvoiceItem(item);
+  }
+  await query('delete from albarans where id=$1', [id]);
+  res.json({ ok: true });
+});
+
+app.put('/api/albarans/:id/print-shipping', authRequired, ensureAllow('sales_order','edit'), async (req, res) => {
+  const id = parseInt(req.params.id, 10) || 0;
+  const r = await query('update albarans set shipping_printed=true where id=$1 returning id', [id]);
+  if (!r.rows[0]) return res.status(404).json({ error: 'not_found' });
+  res.json({ ok: true });
+});
+
+app.put('/api/albarans/:id', authRequired, ensureAllow('sales_order','edit'), async (req, res) => {
+  const id = parseInt(req.params.id, 10) || 0;
+  const x = req.body || {};
+  
+  const check = await query(`select total_amount, items from albarans where id=$1`, [id]);
+  if (!check.rows[0]) return res.status(404).json({ error: 'not_found' });
+  const oldItems = Array.isArray(check.rows[0].items) ? check.rows[0].items : (typeof check.rows[0].items === 'string' ? JSON.parse(check.rows[0].items) : []);
+  const newItems = await attachInvoiceItemSnapshots(Array.isArray(x.items) ? x.items : [], oldItems);
+
+  const deltas = [];
+  const usedNew = new Array(newItems.length).fill(false);
+  for (const oldItem of oldItems) {
+    const oldQty = Number(oldItem?.qty || 0);
+    if (oldQty <= 0) continue;
+    let matchIdx = -1;
+    for (let i = 0; i < newItems.length; i++) {
+      if (usedNew[i]) continue;
+      if (sameInvoiceItemIdentity(oldItem, newItems[i])) { matchIdx = i; break; }
+    }
+    const newQty = matchIdx >= 0 ? Number(newItems[matchIdx]?.qty || 0) : 0;
+    if (matchIdx >= 0) usedNew[matchIdx] = true;
+    const delta = oldQty - Math.max(0, newQty);
+    if (delta !== 0) deltas.push({ base: oldItem, delta });
+  }
+  for (let i = 0; i < newItems.length; i++) {
+    if (usedNew[i]) continue;
+    const newQty = Number(newItems[i]?.qty || 0);
+    if (newQty > 0) deltas.push({ base: newItems[i], delta: -newQty });
+  }
+
+  for (const d of deltas) {
+    if (d.delta > 0) await restoreInventoryForInvoiceItem(d.base, d.delta);
+  }
+  const extraItems = deltas
+    .filter(d => d.delta < 0)
+    .map(d => ({ ...d.base, qty: Math.abs(d.delta) }));
+  await deductAndSplitStock(extraItems);
+
+  const finalItems = newItems
+    .filter(item => Number(item?.qty || 0) > 0)
+    .map(item => ({ ...item, deductions: [] }));
+
+  const total = roundMoneyValue(finalItems.reduce((sum, item) => {
+    const qty = Number(item.qty||0);
+    const price = Number(item.price||0);
+    let taxRate = Number(item.tax_rate);
+    if (isNaN(taxRate) || item.tax_rate === undefined || item.tax_rate === null || item.tax_rate === '') {
+      taxRate = 0.10;
+    }
+    if (taxRate >= 1) taxRate = taxRate / 100;
+    const rowVal = qty * price;
+    const rowTax = rowVal * taxRate;
+    return sum + rowVal + rowTax;
+  }, 0));
+
+  await query(`
+    update albarans set customer=$1, date=$2, items=$3, total_amount=$4, notes=$5, sales=$6
+    where id=$7
+  `, [x.customer||'', x.date||'', JSON.stringify(finalItems), total, x.notes||'', x.sales||'', id]);
+  
+  res.json({ ok: true });
+});
+
 // Invoices endpoints
 app.get('/api/invoices', authRequired, ensureAllow('sales_invoice','view'), async (req, res) => {
   const { q='', page='1', size='100' } = req.query;
@@ -2296,8 +2502,10 @@ app.get('/api/invoices', authRequired, ensureAllow('sales_invoice','view'), asyn
 });
 
 app.get('/api/invoices/next-no', authRequired, ensureAllow('sales_order','view'), async (req, res) => {
-  const rMax = await query("select invoice_no from invoices where invoice_no like 'Factura- %' order by invoice_no desc limit 1");
-  let nextSeq = 231;
+  const year2 = String(new Date().getFullYear()).slice(-2);
+  const like = `Factura- %-${year2}`;
+  const rMax = await query('select invoice_no from invoices where invoice_no like $1 order by invoice_no desc limit 1', [like]);
+  let nextSeq = 1;
   if (rMax.rows[0]) {
     const lastNo = rMax.rows[0].invoice_no;
     const match = lastNo.match(/Factura- (\d{6})-\d{2}/);
@@ -2305,7 +2513,6 @@ app.get('/api/invoices/next-no', authRequired, ensureAllow('sales_order','view')
       nextSeq = parseInt(match[1], 10) + 1;
     }
   }
-  const year2 = String(new Date().getFullYear()).slice(-2);
   const nextNo = `Factura- ${String(nextSeq).padStart(6, '0')}-${year2}`;
   
   // Since frontend expects just the number part (or adds 'Factura：' prefix itself)
@@ -2322,8 +2529,10 @@ app.post('/api/invoices', authRequired, ensureAllow('sales_order','edit'), async
   // Use provided invoice_no or generate new one
   let invoiceNo = x.invoice_no;
   if (!invoiceNo) {
-    const rMax = await query("select invoice_no from invoices where invoice_no like 'Factura- %' order by invoice_no desc limit 1");
-    let nextSeq = 231; // Default starting sequence as requested
+    const year2 = String(new Date().getFullYear()).slice(-2);
+    const like = `Factura- %-${year2}`;
+    const rMax = await query('select invoice_no from invoices where invoice_no like $1 order by invoice_no desc limit 1', [like]);
+    let nextSeq = 1;
     if (rMax.rows[0]) {
       const lastNo = rMax.rows[0].invoice_no;
       const match = lastNo.match(/Factura- (\d{6})-\d{2}/);
@@ -2331,7 +2540,6 @@ app.post('/api/invoices', authRequired, ensureAllow('sales_order','edit'), async
         nextSeq = parseInt(match[1], 10) + 1;
       }
     }
-    const year2 = String(new Date().getFullYear()).slice(-2);
     invoiceNo = `Factura- ${String(nextSeq).padStart(6, '0')}-${year2}`;
   }
 
